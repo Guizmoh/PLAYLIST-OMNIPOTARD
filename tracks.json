@@ -1,0 +1,18 @@
+[
+  {
+    "file": "music/demo-aube.wav",
+    "cover": "music/demo-aube.svg",
+    "title": "Aube",
+    "description": "Morceau de démonstration — remplace-le par les tiens."
+  },
+  {
+    "file": "music/demo-marees.wav",
+    "cover": "music/demo-marees.svg",
+    "title": "Marées"
+  },
+  {
+    "file": "music/demo-lumiere.wav",
+    "cover": "music/demo-lumiere.svg",
+    "title": "Lumière"
+  }
+]
