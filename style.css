@@ -493,6 +493,55 @@ h1, h2, h3, .brand, .card-title, .stat b, .rank-title, .welcome-title { font-fam
 .ranking-card ol { margin: 0; padding-left: 22px; font-size: 14px; color: #dfe7f8; }
 .ranking-card li::marker { color: var(--accent); font-weight: 700; }
 
+/* ---------- Page « Ajouter un morceau » ---------- */
+.upload-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 40px; }
+.dropzone {
+  display: grid; place-items: center; text-align: center; gap: 6px; padding: 30px 16px; cursor: pointer;
+  border: 2px dashed #3e5a90; border-radius: 14px; background: var(--inset); color: var(--muted);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.45); transition: border-color .15s, background .15s, color .15s;
+}
+.dropzone svg { width: 34px; height: 34px; color: var(--accent); }
+.dropzone b { color: var(--text); font-size: 16px; }
+.dropzone small { font-size: 13px; }
+.dropzone.over { border-color: var(--accent); background: #13264f; color: var(--text); }
+.slots { display: grid; grid-template-columns: 140px 1fr; gap: 14px; margin-top: 14px; align-items: start; }
+.slot-img {
+  aspect-ratio: 1; border-radius: 12px; overflow: hidden; display: grid; place-items: center; text-align: center;
+  background: var(--inset); border: 2px dashed #3e5a90; color: var(--faint); font-size: 12px; padding: 8px; cursor: pointer;
+}
+.slot-img.filled { border: 1px solid rgba(0,0,0,.35); padding: 0; box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+.slot-img img { width: 100%; height: 100%; object-fit: cover; }
+.slot-img.over { border-color: var(--accent); }
+.fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fields label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.fields input, .fields textarea, .token-box input {
+  width: 100%; border: 1px solid rgba(0,0,0,.3); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px;
+  color: var(--text); outline: none; background: var(--inset); box-shadow: inset 0 2px 5px rgba(0,0,0,.4);
+}
+.fields textarea { resize: vertical; min-height: 64px; }
+.fields input:focus, .fields textarea:focus, .token-box input:focus { border-color: rgba(255,123,79,.6); }
+.audio-file {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px;
+  background: rgba(8,18,45,.4); border: 1px solid var(--line); min-width: 0;
+}
+.audio-file svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.audio-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audio-file small { color: var(--muted); margin-left: auto; white-space: nowrap; }
+.audio-file.missing { color: var(--faint); border-style: dashed; }
+.upload-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.upload-status { font-size: 14px; color: var(--muted); }
+.upload-status.ok { color: var(--teal); }
+.upload-status.err { color: #ff9a8a; }
+.online-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.online-list li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: 10px; background: rgba(8,18,45,.35); border: 1px solid var(--line); }
+.online-list .rank-cover { width: 40px; height: 40px; }
+.token-box ol { margin: 0 0 14px; padding-left: 20px; color: #c9d6ee; font-size: 14px; line-height: 1.7; }
+.token-box a { color: var(--accent-ink); text-decoration: underline; }
+.token-box .row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.token-box .row input { flex: 1 1 260px; }
+.small-link { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; padding: 0; }
+.small-link:hover { color: var(--text); }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 720px) {
   .container { padding: 0 16px; }
@@ -522,6 +571,8 @@ h1, h2, h3, .brand, .card-title, .stat b, .rank-title, .welcome-title { font-fam
   .menu { order: 3; width: 100%; }
   .menu a { flex: 1; text-align: center; padding: 7px 6px; font-size: 13px; }
   .home-section { scroll-margin-top: 130px; }
+  .upload-grid { grid-template-columns: 1fr; }
+  .slots { grid-template-columns: 110px 1fr; }
   .rank-list { padding: 4px; }
   .rank-item { grid-template-columns: 26px 22px 40px 1fr auto; gap: 8px; padding: 6px 8px; }
   .rank-cover { width: 40px; height: 40px; }

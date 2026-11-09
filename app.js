@@ -308,10 +308,11 @@ async function route() {
   const [path, query] = h.split("?");
   const parts = path.split("/");
   const params = new URLSearchParams(query || "");
-  const key = parts[0] === "admin" ? "admin" : parts[0] === "classement" ? "classement" : "home";
+  const key = ["admin", "classement", "ajouter"].includes(parts[0]) ? parts[0] : "home";
   $$("#menu a").forEach(a => a.classList.toggle("on", a.dataset.route === key));
   if (parts[0] === "t" && byId(parts[1])) return renderTrack(byId(parts[1]), params);
   if (parts[0] === "admin") return renderAdmin();
+  if (parts[0] === "ajouter") return renderUpload();
   renderHome(key === "classement" ? "classement" : null);
 }
 window.addEventListener("hashchange", route);
@@ -727,7 +728,7 @@ async function renderAdmin() {
   const votes = s.reduce((a, x) => a + (x.count || 0), 0);
   const avg = votes ? s.reduce((a, x) => a + x.avg * x.count, 0) / votes : 0;
   app.innerHTML = `
-    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p></section>
+    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p><p style="margin-top:16px"><a class="btn" href="#/ajouter">+ Ajouter un morceau</a></p></section>
     ${store.demo ? `<p class="notice">Mode démo : rien n'est partagé tant que Supabase n'est pas configuré dans <code>config.js</code>.</p>` : ""}
     <div class="admin-stats">
       <div class="stat"><b>${state.tracks.length}</b><span>morceaux</span></div>
@@ -786,7 +787,224 @@ function rankingBoard(rankings) {
     return { id: t.id, title: t.title, score: a.votes ? a.sum / a.votes : 0, firsts: a.firsts, votes: a.votes };
   }).sort((x, y) => y.score - x.score || y.firsts - x.firsts);
 }
-function syncAdmin() { $("#adminPill").hidden = !state.admin; $("#menuAdmin").hidden = !state.admin; }
+function syncAdmin() { $("#adminPill").hidden = !state.admin; $("#menuAdmin").hidden = !state.admin; $("#menuAdd").hidden = !state.admin; }
+
+/* ---------------- Ajouter un morceau (envoi direct sur GitHub) ----------------
+   Utilise une clé d'accès GitHub (« fine-grained token ») limitée à ce dépôt,
+   gardée uniquement dans le navigateur du créateur. */
+const ghRepo = () => CFG.githubRepo || detectRepo();
+const ghToken = () => ls.get("pl:ghtoken", "");
+async function gh(path, opts = {}) {
+  const r = await fetch("https://api.github.com" + path, {
+    method: opts.method || "GET",
+    headers: { Authorization: "Bearer " + ghToken(), Accept: "application/vnd.github+json", ...(opts.body ? { "Content-Type": "application/json" } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (!r.ok) { const e = new Error((await r.json().catch(() => ({}))).message || r.statusText); e.status = r.status; throw e; }
+  return r.status === 204 ? null : r.json();
+}
+const fileToBase64 = file => new Promise((ok, ko) => {
+  const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1]); fr.onerror = ko; fr.readAsDataURL(file);
+});
+async function ghReadTracks() {
+  try {
+    const f = await gh(`/repos/${ghRepo()}/contents/tracks.json?ref=${CFG.githubBranch}`);
+    const bytes = Uint8Array.from(atob(f.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes) || "[]");
+  } catch (e) { if (e.status === 404) return []; throw e; }
+}
+/* Un seul commit pour tous les fichiers (ajout ou suppression) */
+async function ghCommit(changes, message, onStep = () => {}) {
+  const repo = ghRepo(), br = CFG.githubBranch;
+  const ref = await gh(`/repos/${repo}/git/ref/heads/${br}`);
+  const base = await gh(`/repos/${repo}/git/commits/${ref.object.sha}`);
+  const tree = [];
+  for (const c of changes) {
+    if (c.remove) { tree.push({ path: c.path, mode: "100644", type: "blob", sha: null }); continue; }
+    onStep(c.label || c.path);
+    const body = c.text != null ? { content: c.text, encoding: "utf-8" } : { content: await fileToBase64(c.file), encoding: "base64" };
+    const blob = await gh(`/repos/${repo}/git/blobs`, { method: "POST", body });
+    tree.push({ path: c.path, mode: "100644", type: "blob", sha: blob.sha });
+  }
+  onStep("Enregistrement");
+  const t = await gh(`/repos/${repo}/git/trees`, { method: "POST", body: { base_tree: base.tree.sha, tree } });
+  const commit = await gh(`/repos/${repo}/git/commits`, { method: "POST", body: { message, tree: t.sha, parents: [ref.object.sha] } });
+  await gh(`/repos/${repo}/git/refs/heads/${br}`, { method: "PATCH", body: { sha: commit.sha } });
+  try { sessionStorage.removeItem("pl:gh:" + repo); } catch {}
+}
+const mb = n => (n / 1048576).toFixed(1).replace(".", ",") + " Mo";
+
+function renderUpload() {
+  document.title = "Ajouter un morceau · " + CFG.siteTitle;
+  const app = $("#app");
+  if (!ghToken()) {
+    app.innerHTML = `
+      <section class="hero"><h1>Ajouter un morceau</h1><p>Pour envoyer tes morceaux directement depuis cette page, le site a besoin d'une clé d'accès à ton dépôt GitHub. À faire une seule fois par appareil.</p></section>
+      <section class="panel token-box" style="max-width:720px;margin-bottom:40px">
+        <ol>
+          <li>Ouvre <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">la page de création de clé GitHub</a> (connecté avec ton compte).</li>
+          <li><b>Token name</b> : « Playlist » — <b>Expiration</b> : la durée que tu veux (ex. 1 an).</li>
+          <li><b>Repository access</b> : <i>Only select repositories</i> → choisis <b>${esc(ghRepo() || "ton dépôt")}</b>.</li>
+          <li><b>Permissions</b> → <i>Repository permissions</i> → <b>Contents</b> : <i>Read and write</i>.</li>
+          <li>Clique sur <b>Generate token</b>, copie la clé et colle-la ici.</li>
+        </ol>
+        <div class="row">
+          <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">
+          <button class="btn" id="tokenSave">Enregistrer la clé</button>
+        </div>
+        <p class="upload-status" id="tokenStatus" style="margin:10px 0 0">La clé reste uniquement dans ce navigateur. N'utilise pas cette page sur un ordinateur partagé.</p>
+      </section>`;
+    $("#tokenSave").addEventListener("click", async () => {
+      const v = $("#tokenInput").value.trim(); if (!v) return;
+      ls.set("pl:ghtoken", v);
+      const st = $("#tokenStatus"); st.className = "upload-status"; st.textContent = "Vérification…";
+      try {
+        const r = await gh(`/repos/${ghRepo()}`);
+        if (!r.permissions?.push) throw new Error("Cette clé ne peut pas écrire dans le dépôt (permission Contents : Read and write).");
+        toast("Clé enregistrée"); renderUpload();
+      } catch (e) { ls.set("pl:ghtoken", ""); st.className = "upload-status err"; st.textContent = "Clé refusée : " + e.message; }
+    });
+    return;
+  }
+
+  app.innerHTML = `
+    <section class="hero"><h1>Ajouter un morceau</h1><p>Glisse ton son et son image, donne un titre, et c'est en ligne environ une minute après.</p></section>
+    <div class="upload-grid">
+      <section class="panel">
+        <label class="dropzone" id="drop">
+          ${I.note}<b>Glisse ici ton son et son image</b><small>MP3, WAV, OGG, M4A… + JPG, PNG, WEBP — ou clique pour choisir</small>
+          <input type="file" id="fileInput" accept="audio/*,image/*,.wav,.mp3,.flac,.m4a,.ogg" multiple hidden>
+        </label>
+        <div class="slots">
+          <div class="slot-img" id="imgSlot" title="Glisse ou clique pour choisir l'image">Image<br>(facultative)</div>
+          <input type="file" id="imgInput" accept="image/*" hidden>
+          <div class="fields">
+            <div class="audio-file missing" id="audioInfo">${I.note}<span>Aucun son choisi</span></div>
+            <label for="upTitle">Titre</label>
+            <input id="upTitle" maxlength="120" placeholder="Nom du morceau">
+            <label for="upDesc">Description (facultative)</label>
+            <textarea id="upDesc" maxlength="500" placeholder="Un mot sur le morceau, ce sur quoi tu veux des retours…"></textarea>
+          </div>
+        </div>
+        <div class="upload-actions">
+          <button class="btn" id="upSend">Mettre en ligne</button>
+          <button class="btn ghost" id="upReset" type="button">Vider</button>
+          <span class="upload-status" id="upStatus"></span>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="section-title" style="font-size:18px">Morceaux en ligne</h2>
+        <ul class="online-list" id="onlineList"><li class="upload-status">Chargement…</li></ul>
+        <p style="margin:14px 0 0"><button class="small-link" id="tokenForget">Oublier la clé GitHub sur cet appareil</button></p>
+      </section>
+    </div>`;
+
+  let audioFile = null, imageFile = null, busy = false;
+  const status = (msg, cls = "") => { const s = $("#upStatus"); s.className = "upload-status " + cls; s.textContent = msg; };
+  const isAudio = f => f.type.startsWith("audio/") || AUDIO_EXT.includes(ext(f.name));
+  const isImage = f => f.type.startsWith("image/") || IMAGE_EXT.includes(ext(f.name));
+
+  function paint() {
+    const ai = $("#audioInfo");
+    ai.classList.toggle("missing", !audioFile);
+    ai.innerHTML = `${I.note}<span>${audioFile ? esc(audioFile.name) : "Aucun son choisi"}</span>${audioFile ? `<small>${mb(audioFile.size)}</small>` : ""}`;
+    const slot = $("#imgSlot");
+    slot.classList.toggle("filled", !!imageFile);
+    slot.innerHTML = imageFile ? `<img alt="" src="${URL.createObjectURL(imageFile)}">` : "Image<br>(facultative)";
+  }
+  function take(files) {
+    for (const f of files) {
+      if (isAudio(f)) {
+        audioFile = f;
+        if (!$("#upTitle").value.trim()) $("#upTitle").value = prettify(baseName(f.name));
+        if (f.size > 95 * 1048576) status("Ce fichier dépasse 95 Mo : GitHub le refusera. Exporte-le en MP3.", "err");
+        else if (f.size > 45 * 1048576) status("Fichier lourd : l'envoi peut prendre un moment. Un MP3 320 kbps se chargera plus vite pour tes auditeurs.");
+        else status("");
+      } else if (isImage(f)) imageFile = f;
+    }
+    paint();
+  }
+  const drop = $("#drop");
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => take(e.dataTransfer.files));
+  $("#fileInput").addEventListener("change", e => take(e.target.files));
+  const slot = $("#imgSlot");
+  slot.addEventListener("click", () => $("#imgInput").click());
+  ["dragenter", "dragover"].forEach(ev => slot.addEventListener(ev, e => { e.preventDefault(); slot.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => slot.addEventListener(ev, e => { e.preventDefault(); slot.classList.remove("over"); }));
+  slot.addEventListener("drop", e => { const f = [...e.dataTransfer.files].find(isImage); if (f) { imageFile = f; paint(); } });
+  $("#imgInput").addEventListener("change", e => { if (e.target.files[0]) { imageFile = e.target.files[0]; paint(); } });
+  // empêche le navigateur d'ouvrir un fichier lâché à côté de la zone
+  view.destroy = () => { window.removeEventListener("dragover", stop); window.removeEventListener("drop", stop); };
+  function stop(e) { e.preventDefault(); }
+  window.addEventListener("dragover", stop); window.addEventListener("drop", stop);
+
+  $("#upReset").addEventListener("click", () => { audioFile = imageFile = null; $("#upTitle").value = ""; $("#upDesc").value = ""; status(""); paint(); });
+  $("#tokenForget").addEventListener("click", () => { if (confirm("Oublier la clé GitHub sur cet appareil ?")) { ls.set("pl:ghtoken", ""); renderUpload(); } });
+
+  async function loadOnline() {
+    const ul = $("#onlineList");
+    try {
+      const list = await ghReadTracks();
+      ul.innerHTML = list.length ? list.map((t, i) => `
+        <li><span class="rank-cover">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : `<div class="cover-placeholder">${I.note}</div>`}</span>
+          <span class="rank-title">${esc(t.title || baseName(t.file))}<small>${esc(t.file)}</small></span>
+          <button class="del-btn" data-i="${i}">Supprimer</button></li>`).join("")
+        : `<li class="upload-status" style="display:block;border:0;background:none">Aucun morceau pour l'instant.</li>`;
+      $$("[data-i]", ul).forEach(b => b.addEventListener("click", async () => {
+        const t = list[+b.dataset.i];
+        if (busy || !confirm(`Supprimer « ${t.title || t.file} » du site ? Le son et son image seront retirés.`)) return;
+        busy = true; b.textContent = "…";
+        try {
+          const rest = list.filter((_, j) => j !== +b.dataset.i);
+          const changes = [{ path: "tracks.json", text: JSON.stringify(rest, null, 2) + "\n" }, { path: t.file, remove: true }];
+          if (t.cover && t.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: t.cover, remove: true });
+          await ghCommit(changes, `Supprime le morceau « ${t.title || t.file} »`);
+          toast("Morceau supprimé (le site se met à jour dans ~1 min)");
+          loadOnline();
+        } catch (e) { console.error(e); toast("Suppression impossible : " + e.message); b.textContent = "Supprimer"; }
+        busy = false;
+      }));
+    } catch (e) {
+      ul.innerHTML = `<li class="upload-status err" style="display:block;border:0;background:none">Impossible de lire le dépôt : ${esc(e.message)}</li>`;
+      if (e.status === 401) { ls.set("pl:ghtoken", ""); toast("Clé GitHub expirée ou invalide"); }
+    }
+  }
+  loadOnline();
+
+  $("#upSend").addEventListener("click", async () => {
+    if (busy) return;
+    const title = $("#upTitle").value.trim();
+    if (!audioFile) return status("Ajoute d'abord un fichier son.", "err");
+    if (!title) return status("Donne un titre au morceau.", "err");
+    if (audioFile.size > 95 * 1048576) return status("Fichier trop lourd (plus de 95 Mo).", "err");
+    busy = true; $("#upSend").disabled = true;
+    try {
+      status("Préparation…");
+      const list = await ghReadTracks();
+      const used = new Set(list.flatMap(t => [t.file, t.cover]).filter(Boolean).map(p => baseName(p).toLowerCase()));
+      let name = slug(title) || "morceau", n = 2;
+      while (used.has(name)) name = `${slug(title) || "morceau"}-${n++}`;
+      const audioPath = `${CFG.musicFolder}/${name}.${ext(audioFile.name) || "mp3"}`;
+      const imgPath = imageFile ? `${CFG.musicFolder}/${name}.${ext(imageFile.name) || "jpg"}` : null;
+      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...($("#upDesc").value.trim() ? { description: $("#upDesc").value.trim() } : {}) };
+      const changes = [{ path: audioPath, file: audioFile, label: `Envoi du son (${mb(audioFile.size)})` }];
+      if (imageFile) changes.push({ path: imgPath, file: imageFile, label: "Envoi de l'image" });
+      changes.push({ path: "tracks.json", text: JSON.stringify([entry, ...list], null, 2) + "\n", label: "Mise à jour de la liste" });
+      await ghCommit(changes, `Ajoute le morceau « ${title} »`, s => status(s + "…"));
+      status(`« ${title} » est envoyé ! Il apparaîtra sur le site dans environ une minute.`, "ok");
+      toast("Morceau mis en ligne");
+      audioFile = imageFile = null; $("#upTitle").value = ""; $("#upDesc").value = ""; paint();
+      loadOnline();
+    } catch (e) {
+      console.error(e);
+      status("L'envoi a échoué : " + e.message, "err");
+      if (e.status === 401) ls.set("pl:ghtoken", "");
+    }
+    busy = false; $("#upSend").disabled = false;
+  });
+}
 
 /* ---------------- Démarrage ---------------- */
 (async function init() {

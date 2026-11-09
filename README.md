@@ -18,7 +18,11 @@ C'est ce lien que tu partages. Chaque morceau a aussi son propre lien (bouton **
 
 ## 2. Ajouter un morceau
 
-**Le plus simple :** sur GitHub, ouvre le dossier `music/` → **Add file → Upload files**, et dépose :
+**Le plus simple : la page « Ajouter » du site** (`…/#/ajouter`, visible dans le menu en mode créateur).
+Glisse ton son (MP3, WAV…) et son image, écris le titre, clique sur **Mettre en ligne** : le site envoie tout sur GitHub et met à jour `tracks.json` tout seul. La même page permet de supprimer un morceau.
+La première fois, elle te demande une clé d'accès GitHub limitée à ce dépôt (les étapes sont expliquées sur la page). Cette clé reste uniquement dans ton navigateur.
+
+**Autre méthode, directement sur GitHub :** sur GitHub, ouvre le dossier `music/` → **Add file → Upload files**, et dépose :
 
 - ton son : `mon-morceau.mp3` (ou `.wav`)
 - sa pochette avec **le même nom** : `mon-morceau.jpg` (ou `.png`, `.webp`)
@@ -42,7 +46,6 @@ Les morceaux de `tracks.json` s'affichent en premier, dans cet ordre ; les autre
 
 > **Taille des fichiers :** l'envoi par le site GitHub est limité à **25 Mo par fichier**. Pour les gros WAV (jusqu'à 100 Mo), utilise [GitHub Desktop](https://desktop.github.com) ou exporte en MP3 320 kbps.
 
-> Supprime les morceaux de démo (`music/demo-*`) et leurs lignes dans `tracks.json`.
 
 ## 3. Activer les commentaires partagés (Supabase, gratuit)
 

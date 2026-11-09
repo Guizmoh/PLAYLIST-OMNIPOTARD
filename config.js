@@ -26,7 +26,7 @@ window.PLAYLIST_CONFIG = {
   // dans le dossier "music/" apparaissent automatiquement.
   // Une image du même nom (ex: music/mon-son.jpg pour music/mon-son.mp3) sert de pochette.
   // Laisse vide : le dépôt est deviné à partir de l'adresse (pseudo.github.io/depot).
-  githubRepo: "",        // ex: "pseudo/playlist" (seulement si la détection ne marche pas)
+  githubRepo: "Guizmoh/PLAYLIST-OMNIPOTARD",   // utilisé aussi par la page « Ajouter »
   githubBranch: "main",
   musicFolder: "music"
 };
