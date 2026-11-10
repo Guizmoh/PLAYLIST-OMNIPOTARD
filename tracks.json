@@ -23,7 +23,8 @@
     "id": "long-trip",
     "file": "music/long-trip.mp3",
     "cover": "music/long-trip-mwacc1x8.jpg",
-    "title": "Long trip"
+    "title": "Long trip",
+    "wip": true
   },
   {
     "id": "plucky",
