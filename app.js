@@ -202,6 +202,9 @@ function playTrack(t, at) {
     $("#playerArtist").textContent = t.artist;
     document.title = t.title + " · " + CFG.siteTitle;
     pcReset(); syncCommentBar();
+    // forme d'onde du lecteur du bas : on la récupère (ou la calcule) pour ce morceau
+    playerPeaks = state.peaks[t.id] || null; drawPlayerWave();
+    if (!playerPeaks) getPeaks(t).then(p => { if (state.current === t) { playerPeaks = p; drawPlayerWave(); } }).catch(() => {});
   }
   if (at != null) {
     if (audio.readyState >= 1) audio.currentTime = at;
@@ -230,11 +233,43 @@ function syncProgress() {
   $("#playerDuration").textContent = fmt(d);
   view.onTime?.();
   pcPaint();
+  drawPlayerWave();
 }
+
+/* Forme d'onde du lecteur du bas : style différent de la page morceau
+   (barres fines, partie écoutée en dégradé turquoise → corail, reflet en dessous) */
+let playerPeaks = null;
+function drawPlayerWave() {
+  const cv = $("#playerWave"), bar = $("#playerBar");
+  const on = !!playerPeaks;
+  cv.hidden = !on; bar.classList.toggle("has-wave", on);
+  if (!on) return;
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const prog = audio.duration ? audio.currentTime / audio.duration : 0;
+  const barW = 2, gap = 1.5, n = Math.max(1, Math.floor(w / (barW + gap)));
+  const mid = h * 0.68;                         // ligne de base : barres au-dessus, petit reflet en dessous
+  const grad = g.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, "#4fd6c8"); grad.addColorStop(1, "#ff7b4f");
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i / n * playerPeaks.length), b = Math.max(a + 1, Math.floor((i + 1) / n * playerPeaks.length));
+    let p = 0; for (let k = a; k < b; k++) p = Math.max(p, playerPeaks[k]);
+    const up = Math.max(2, p * (mid - 1)), down = up * 0.35, x = i * (barW + gap);
+    const played = (i + .5) / n <= prog;
+    g.fillStyle = played ? grad : "rgba(165, 185, 215, .32)";
+    g.fillRect(x, mid - up, barW, up);
+    g.globalAlpha = played ? .35 : .15;
+    g.fillRect(x, mid + 1, barW, down);
+    g.globalAlpha = 1;
+  }
+}
+window.addEventListener("resize", () => drawPlayerWave());
 ["play", "pause", "ended"].forEach(e => audio.addEventListener(e, syncPlayButtons));
 ["timeupdate", "loadedmetadata", "seeked"].forEach(e => audio.addEventListener(e, syncProgress));
 audio.addEventListener("loadedmetadata", () => { if (state.current) state.durations[state.current.id] = audio.duration; });
-audio.addEventListener("play", () => { const loop = () => { if (!audio.paused) { view.onTime?.(); requestAnimationFrame(loop); } }; loop(); });
+audio.addEventListener("play", () => { const loop = () => { if (!audio.paused) { view.onTime?.(); drawPlayerWave(); requestAnimationFrame(loop); } }; loop(); });
 $("#playerToggle").addEventListener("click", () => toggle());
 $("#playerBar").addEventListener("click", e => {
   const r = e.currentTarget.getBoundingClientRect();
@@ -1053,7 +1088,11 @@ function renderUpload(params = new URLSearchParams()) {
             <textarea id="upDesc" maxlength="500" placeholder="Un mot sur le morceau, ce sur quoi tu veux des retours…"></textarea>
             <label for="upTagInput">Tags <span style="font-weight:500">(4 max — Entrée ou virgule pour valider)</span></label>
             <div class="tag-input" id="tagBox"><span id="tagChips" class="tags"></span><input id="upTagInput" maxlength="24" placeholder="ambient, dub techno…"></div>
-            <label class="wip-check"><input type="checkbox" id="upWip"${params.get("wip") === "1" ? " checked" : ""}> <span><b>Work In Progress (W.I.P.)</b> — affiché sur la page W.I.P., avec son propre classement</span></label>
+            <label>Catégorie</label>
+            <div class="cat-choice" role="radiogroup">
+              <label class="cat-opt"><input type="radio" name="upCat" value="home"${params.get("wip") === "1" ? "" : " checked"}><span><b>Morceaux</b><small>page d'accueil</small></span></label>
+              <label class="cat-opt wip"><input type="radio" name="upCat" value="wip"${params.get("wip") === "1" ? " checked" : ""}><span><b>Work In Progress</b><small>page W.I.P.</small></span></label>
+            </div>
           </div>
         </div>
         <div class="upload-actions">
@@ -1094,7 +1133,8 @@ function renderUpload(params = new URLSearchParams()) {
     $("#upTitle").value = entry ? entry.title || prettify(baseName(entry.file)) : "";
     $("#upDesc").value = entry ? entry.description || "" : "";
     upTags = entry ? cleanTags(entry.tags) : []; $("#upTagInput").value = ""; paintTags();
-    $("#upWip").checked = entry ? !!entry.wip : params.get("wip") === "1";
+    const cat = (entry ? entry.wip : params.get("wip") === "1") ? "wip" : "home";
+    $(`input[name="upCat"][value="${cat}"]`).checked = true;
     $("#formTitle").textContent = entry ? `Modifier « ${entry.title || baseName(entry.file)} »` : "Nouveau morceau";
     $("#upSend").textContent = entry ? "Enregistrer les modifications" : "Mettre en ligne";
     $("#upReset").textContent = entry ? "Annuler" : "Vider";
@@ -1200,7 +1240,7 @@ function renderUpload(params = new URLSearchParams()) {
     const desc = $("#upDesc").value.trim();
     if ($("#upTagInput").value.trim()) addTag($("#upTagInput").value);
     const tags = upTags.slice(0, 4);
-    const wipExtra = $("#upWip").checked ? { wip: true } : {};
+    const wipExtra = $('input[name="upCat"]:checked')?.value === "wip" ? { wip: true } : {};
     if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
     if (audioFile && audioFile.size > MAX_UPLOAD && ext(audioFile.name) === "mp3") return status("Ce MP3 dépasse 35 Mo : exporte-le dans un débit plus bas.", "err");
