@@ -907,6 +907,36 @@ async function ghCommit(changes, message, onStep = () => {}) {
   try { sessionStorage.removeItem("pl:gh:" + repo); } catch {}
 }
 const mb = n => (n / 1048576).toFixed(1).replace(".", ",") + " Mo";
+const MAX_UPLOAD = 35 * 1048576;   // limite réelle de l'API GitHub pour un envoi depuis le navigateur
+
+/* Conversion WAV/FLAC/… → MP3 320 kbps directement dans le navigateur (lamejs) */
+function loadScript(src) {
+  return new Promise((ok, ko) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => ko(new Error("impossible de charger le convertisseur MP3")); document.head.appendChild(s); });
+}
+async function toMp3(file, onProgress = () => {}) {
+  if (!window.lamejs) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js");
+  onProgress(0);
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx({ sampleRate: 44100 });
+  const ab = await file.arrayBuffer();
+  const buf = await new Promise((ok, ko) => { const p = ctx.decodeAudioData(ab, ok, ko); if (p && p.catch) p.catch(() => {}); });
+  ctx.close?.();
+  const chans = Math.min(2, buf.numberOfChannels);
+  const enc = new window.lamejs.Mp3Encoder(chans, buf.sampleRate, 320);
+  const L = buf.getChannelData(0), R = chans > 1 ? buf.getChannelData(1) : null;
+  const toI16 = (src, s, e) => { const o = new Int16Array(e - s); for (let i = s; i < e; i++) { const v = Math.max(-1, Math.min(1, src[i])); o[i - s] = v < 0 ? v * 0x8000 : v * 0x7fff; } return o; };
+  const out = [], STEP = 1152;
+  for (let i = 0, n = 0; i < L.length; i += STEP, n++) {
+    const e = Math.min(i + STEP, L.length);
+    const d = chans > 1 ? enc.encodeBuffer(toI16(L, i, e), toI16(R, i, e)) : enc.encodeBuffer(toI16(L, i, e));
+    if (d.length) out.push(new Uint8Array(d.buffer, d.byteOffset, d.length).slice());
+    if (n % 300 === 0) { onProgress(i / L.length); await new Promise(r => setTimeout(r)); }
+  }
+  const end = enc.flush();
+  if (end.length) out.push(new Uint8Array(end.buffer, end.byteOffset, end.length).slice());
+  onProgress(1);
+  return new File(out, baseName(file.name) + ".mp3", { type: "audio/mpeg" });
+}
 
 function renderUpload(params = new URLSearchParams()) {
   let pendingEdit = params.get("edit");   // ouvert depuis le bouton « Modifier » d'une page morceau
@@ -1010,7 +1040,8 @@ function renderUpload(params = new URLSearchParams()) {
       if (isAudio(f)) {
         audioFile = f;
         if (!$("#upTitle").value.trim()) $("#upTitle").value = prettify(baseName(f.name));
-        if (f.size > 35 * 1048576) status("Ce fichier dépasse 35 Mo : GitHub refuse les fichiers aussi lourds envoyés depuis le site. Exporte-le en MP3 320 kbps (environ 2,4 Mo par minute).", "err");
+        if (f.size > MAX_UPLOAD && ext(f.name) === "mp3") status("Ce MP3 dépasse 35 Mo : GitHub le refusera. Exporte-le dans un débit plus bas (256 kbps).", "err");
+        else if (f.size > MAX_UPLOAD) status(`Fichier de ${mb(f.size)} : il sera converti automatiquement en MP3 320 kbps (qualité quasi identique) avant l'envoi.`);
         else if (f.size > 20 * 1048576) status("Fichier lourd : l'envoi peut prendre un moment. Un MP3 320 kbps se chargera plus vite pour tes auditeurs.");
         else status("");
       } else if (isImage(f)) imageFile = f;
@@ -1079,9 +1110,17 @@ function renderUpload(params = new URLSearchParams()) {
     const desc = $("#upDesc").value.trim();
     if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
-    if (audioFile && audioFile.size > 35 * 1048576) return status("Fichier trop lourd (plus de 35 Mo) : exporte-le en MP3 320 kbps.", "err");
+    if (audioFile && audioFile.size > MAX_UPLOAD && ext(audioFile.name) === "mp3") return status("Ce MP3 dépasse 35 Mo : exporte-le dans un débit plus bas.", "err");
     busy = true; $("#upSend").disabled = true;
     try {
+      // Trop lourd pour GitHub ? Conversion automatique en MP3 320 kbps dans le navigateur.
+      if (audioFile && audioFile.size > MAX_UPLOAD) {
+        const before = audioFile.size;
+        audioFile = await toMp3(audioFile, p => status(`Conversion en MP3 320 kbps… ${Math.round(p * 100)} %`));
+        paint();
+        if (audioFile.size > MAX_UPLOAD) throw new Error(`même converti, le morceau fait ${mb(audioFile.size)} (trop long pour un envoi depuis le site)`);
+        status(`Converti : ${mb(before)} → ${mb(audioFile.size)}`);
+      }
       status("Préparation…");
       const list = await ghReadTracks();
 
