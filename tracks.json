@@ -25,10 +25,15 @@
     "title": "New york my friend"
   },
   {
+    "id": "coeur-perdu",
     "file": "music/coeur-perdu.mp3",
     "cover": "music/coeur-perdu.jpg",
     "title": "Coeur perdu",
-    "description": "Trip-hop, Cinematic"
+    "description": "Trip-hop, Cinematic",
+    "tags": [
+      "trip hop",
+      "cinematic"
+    ]
   },
   {
     "id": "sway",
