@@ -1,5 +1,10 @@
 [
   {
+    "file": "music/sway.mp3",
+    "cover": "music/sway.webp",
+    "title": "Sway"
+  },
+  {
     "file": "music/enbad.mp3",
     "title": "Enbad",
     "description": "Embiant, Dub techno"
