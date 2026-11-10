@@ -51,6 +51,9 @@ create policy "suppression admin" on public.comments for delete using (public.is
 revoke all on public.comments from anon, authenticated;
 grant insert (track_id, author, body, timecode, written_at_position) on public.comments to anon, authenticated;
 grant delete on public.comments to authenticated;
+-- Nécessaire pour que la suppression puisse cibler un commentaire (WHERE id = …).
+-- Sans risque : la règle "lecture admin" ne laisse voir les lignes qu'au créateur.
+grant select on public.comments to authenticated;
 
 revoke all on public.ratings from anon, authenticated;   -- les notes passent par rate_track()
 

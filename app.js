@@ -707,7 +707,7 @@ function renderTrack(t, params) {
     $$("[data-del]", ul).forEach(b => b.addEventListener("click", async () => {
       if (!confirm("Supprimer ce commentaire ?")) return;
       try { await store.deleteComment(b.dataset.del); await loadComments(); toast("Commentaire supprimé"); }
-      catch (err) { console.error(err); toast("Suppression impossible"); }
+      catch (err) { console.error(err); toast("Suppression impossible : " + (err.message || err)); }
     }));
   }
 
