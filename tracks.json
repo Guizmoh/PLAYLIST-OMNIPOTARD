@@ -57,7 +57,12 @@
     "id": "new-york-my-friend",
     "file": "music/new-york-my-friend.mp3",
     "cover": "music/new-york-my-friend-mwacdd7c.jpg",
-    "title": "New york my friend"
+    "title": "New york my friend",
+    "description": "Trip hop, inspiration type ¨¨¨56543 ortishead (de loin et dans la nuit)\nVoix de la chanteuse extrait d'une vidéo faite sur youtube, faudrait que je retrouve pour lui demandé son autorisation de la posté en la créditant.",
+    "tags": [
+      "trip hop",
+      "vocal"
+    ]
   },
   {
     "id": "coeur-perdu",
