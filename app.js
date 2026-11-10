@@ -257,7 +257,7 @@ async function getPeaks(t) {
   const buf = await (await fetch(t.file)).arrayBuffer();
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx();
-  const data = await new Promise((ok, ko) => ctx.decodeAudioData(buf, ok, ko));
+  const data = await new Promise((ok, ko) => { const p = ctx.decodeAudioData(buf, ok, ko); if (p && p.catch) p.catch(() => {}); });
   ctx.close?.();
   const N = 600, ch = [...Array(data.numberOfChannels).keys()].map(i => data.getChannelData(i));
   const len = data.length, step = Math.floor(len / N) || 1, peaks = [];
