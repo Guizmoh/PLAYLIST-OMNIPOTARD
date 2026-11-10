@@ -842,11 +842,10 @@ function renderUpload() {
       <section class="hero"><h1>Ajouter un morceau</h1><p>Pour envoyer tes morceaux directement depuis cette page, le site a besoin d'une clé d'accès à ton dépôt GitHub. À faire une seule fois par appareil.</p></section>
       <section class="panel token-box" style="max-width:720px;margin-bottom:40px">
         <ol>
-          <li>Ouvre <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">la page de création de clé GitHub</a> (connecté avec ton compte).</li>
-          <li><b>Token name</b> : « Playlist » — <b>Expiration</b> : la durée que tu veux (ex. 1 an).</li>
-          <li><b>Repository access</b> : <i>Only select repositories</i> → choisis <b>${esc(ghRepo() || "ton dépôt")}</b>.</li>
-          <li><b>Permissions</b> → <i>Repository permissions</i> → <b>Contents</b> : <i>Read and write</i>.</li>
-          <li>Clique sur <b>Generate token</b>, copie la clé et colle-la ici.</li>
+          <li>Ouvre <a href="https://github.com/settings/personal-access-tokens/new?name=Playlist%20Omnipotard&description=Ajout%20de%20morceaux%20depuis%20le%20site&expires_in=366&contents=write" target="_blank" rel="noopener">la page de création de clé GitHub</a> (connecté avec ton compte). Le nom, la durée et la permission sont déjà remplis.</li>
+          <li>Dans <b>Repository access</b>, choisis <i>Only select repositories</i> puis <b>${esc(ghRepo() || "ton dépôt")}</b>.</li>
+          <li>Vérifie que <b>Contents</b> est sur <i>Read and write</i> (sinon, règle-le dans <i>Permissions</i>).</li>
+          <li>Clique sur <b>Generate token</b>, copie la clé et colle-la ici. C'est fini, tu n'auras plus à le refaire sur cet appareil.</li>
         </ol>
         <div class="row">
           <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">

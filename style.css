@@ -1,8 +1,8 @@
 :root {
   /* Fond : bleu moyen mat (thème A, identique à la maquette) */
-  --bg: #3a5677;
-  --bg-hi: #4b6a90;
-  --bg-lo: #2c445f;
+  --bg: #263b55;
+  --bg-hi: #344f70;
+  --bg-lo: #1a2b40;
   /* Cadres : bleu foncé brillant */
   --panel-1: #1f3866;
   --panel-2: #132650;
