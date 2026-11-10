@@ -1,5 +1,10 @@
 [
   {
+    "file": "music/new-york-my-friend.mp3",
+    "cover": "music/new-york-my-friend.png",
+    "title": "New york my friend"
+  },
+  {
     "file": "music/coeur-perdu.mp3",
     "cover": "music/coeur-perdu.jpg",
     "title": "Coeur perdu",
