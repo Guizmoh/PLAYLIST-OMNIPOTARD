@@ -29,7 +29,14 @@
     "id": "high-tunes",
     "file": "music/high-tunes.mp3",
     "cover": "music/high-tunes-mwacbjz0.jpg",
-    "title": "High tunes"
+    "title": "High tunes",
+    "description": "Skank, beaucoup de sub, une wobble bas (le wuwuwuwu) bref... du dub techno.\nTrès fortement inspiré de high tones ou en tout cas des souvenir que j'en ai.",
+    "tags": [
+      "dub",
+      "dubtechno",
+      "skank",
+      "bass music"
+    ]
   },
   {
     "id": "long-trip",
