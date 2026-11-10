@@ -1010,8 +1010,8 @@ function renderUpload(params = new URLSearchParams()) {
       if (isAudio(f)) {
         audioFile = f;
         if (!$("#upTitle").value.trim()) $("#upTitle").value = prettify(baseName(f.name));
-        if (f.size > 95 * 1048576) status("Ce fichier dépasse 95 Mo : GitHub le refusera. Exporte-le en MP3.", "err");
-        else if (f.size > 45 * 1048576) status("Fichier lourd : l'envoi peut prendre un moment. Un MP3 320 kbps se chargera plus vite pour tes auditeurs.");
+        if (f.size > 35 * 1048576) status("Ce fichier dépasse 35 Mo : GitHub refuse les fichiers aussi lourds envoyés depuis le site. Exporte-le en MP3 320 kbps (environ 2,4 Mo par minute).", "err");
+        else if (f.size > 20 * 1048576) status("Fichier lourd : l'envoi peut prendre un moment. Un MP3 320 kbps se chargera plus vite pour tes auditeurs.");
         else status("");
       } else if (isImage(f)) imageFile = f;
     }
@@ -1079,7 +1079,7 @@ function renderUpload(params = new URLSearchParams()) {
     const desc = $("#upDesc").value.trim();
     if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
-    if (audioFile && audioFile.size > 95 * 1048576) return status("Fichier trop lourd (plus de 95 Mo).", "err");
+    if (audioFile && audioFile.size > 35 * 1048576) return status("Fichier trop lourd (plus de 35 Mo) : exporte-le en MP3 320 kbps.", "err");
     busy = true; $("#upSend").disabled = true;
     try {
       status("Préparation…");
