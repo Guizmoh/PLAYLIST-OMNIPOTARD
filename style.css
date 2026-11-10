@@ -678,3 +678,16 @@ a.tag:hover, .tag.on { background: var(--accent); color: #fff; border-color: var
 .tag-input input::placeholder { color: var(--faint); }
 .tag.chip button { border: 0; background: none; color: inherit; font-size: 14px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; opacity: .8; }
 .tag.chip button:hover { opacity: 1; }
+
+/* ---------- Bouton « Créateur » (seulement sur tes appareils) ---------- */
+.creator-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 11px;
+  font-weight: 700; font-size: 14px; color: #06302c;
+  background: linear-gradient(180deg, #7fe8dd, var(--teal) 55%, #36bdb0);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 3px 0 #1f8d83, 0 6px 14px rgba(79,214,200,.25);
+  transition: transform .1s, filter .15s;
+}
+.creator-btn:hover { filter: brightness(1.06); }
+.creator-btn:active { transform: translateY(2px); }
+.creator-btn svg { width: 17px; height: 17px; }
+@media (max-width: 720px) { .creator-btn span { display: none; } .creator-btn { padding: 8px 10px; } }

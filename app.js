@@ -895,7 +895,23 @@ function rankingBoard(rankings) {
     return { id: t.id, title: t.title, score: a.votes ? a.sum / a.votes : 0, firsts: a.firsts, votes: a.votes };
   }).sort((x, y) => y.score - x.score || y.firsts - x.firsts);
 }
-function syncAdmin() { $("#adminPill").hidden = !state.admin; $("#menuAdmin").hidden = !state.admin; $("#menuAdd").hidden = !state.admin; }
+function syncAdmin() {
+  if (state.admin) ls.set("pl:creatorDevice", true);   // cet appareil est celui du créateur
+  $("#adminPill").hidden = !state.admin;
+  $("#menuAdmin").hidden = !state.admin;
+  $("#menuAdd").hidden = !state.admin;
+  // Les visiteurs ne voient aucun accès créateur ; sur tes appareils, le bouton est bien visible.
+  $("#adminLink").hidden = !(state.admin || ls.get("pl:creatorDevice", false));
+}
+/* Accès secret pour un nouvel appareil : 3 clics rapides sur le logo (ou l'adresse …/#/admin) */
+(() => {
+  let clicks = 0, timer;
+  $(".brand").addEventListener("click", e => {
+    clicks++; clearTimeout(timer);
+    if (clicks >= 3) { e.preventDefault(); clicks = 0; location.hash = "#/admin"; return; }
+    timer = setTimeout(() => { clicks = 0; }, 700);
+  });
+})();
 
 /* ---------------- Ajouter un morceau (envoi direct sur GitHub) ----------------
    Utilise une clé d'accès GitHub (« fine-grained token ») limitée à ce dépôt,
