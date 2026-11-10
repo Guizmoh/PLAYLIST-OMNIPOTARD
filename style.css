@@ -598,3 +598,6 @@ body.has-cbar .toast { bottom: calc(var(--player-h) + 96px); }
   body.has-cbar .toast { bottom: 216px; }
 }
 body.has-cbar .player { height: auto; row-gap: 10px; }
+.row-actions { display: flex; gap: 4px; }
+.edit-btn { border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600; padding: 3px 7px; border-radius: 7px; }
+.edit-btn:hover { color: #fff; background: rgba(79, 214, 200, .25); }

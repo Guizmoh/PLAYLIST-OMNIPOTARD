@@ -928,7 +928,8 @@ function renderUpload() {
   app.innerHTML = `
     <section class="hero"><h1>Ajouter un morceau</h1><p>Glisse ton son et son image, donne un titre, et c'est en ligne environ une minute après.</p></section>
     <div class="upload-grid">
-      <section class="panel">
+      <section class="panel" id="formPanel">
+        <h2 class="section-title" id="formTitle" style="font-size:18px">Nouveau morceau</h2>
         <label class="dropzone" id="drop">
           ${I.note}<b>Glisse ici ton son et son image</b><small>MP3, WAV, OGG, M4A… + JPG, PNG, WEBP — ou clique pour choisir</small>
           <input type="file" id="fileInput" accept="audio/*,image/*,.wav,.mp3,.flac,.m4a,.ogg" multiple hidden>
@@ -958,17 +959,35 @@ function renderUpload() {
     </div>`;
 
   let audioFile = null, imageFile = null, busy = false;
+  let editing = null;   // morceau en cours de modification (entrée de tracks.json), sinon null
   const status = (msg, cls = "") => { const s = $("#upStatus"); s.className = "upload-status " + cls; s.textContent = msg; };
   const isAudio = f => f.type.startsWith("audio/") || AUDIO_EXT.includes(ext(f.name));
   const isImage = f => f.type.startsWith("image/") || IMAGE_EXT.includes(ext(f.name));
 
   function paint() {
     const ai = $("#audioInfo");
-    ai.classList.toggle("missing", !audioFile);
-    ai.innerHTML = `${I.note}<span>${audioFile ? esc(audioFile.name) : "Aucun son choisi"}</span>${audioFile ? `<small>${mb(audioFile.size)}</small>` : ""}`;
+    ai.classList.toggle("missing", !audioFile && !editing);
+    ai.innerHTML = audioFile
+      ? `${I.note}<span>${esc(audioFile.name)}</span><small>${mb(audioFile.size)}</small>`
+      : editing
+        ? `${I.note}<span>${esc(baseName(editing.file) + "." + ext(editing.file))}</span><small>son actuel — glisse un fichier pour le remplacer</small>`
+        : `${I.note}<span>Aucun son choisi</span>`;
     const slot = $("#imgSlot");
-    slot.classList.toggle("filled", !!imageFile);
-    slot.innerHTML = imageFile ? `<img alt="" src="${URL.createObjectURL(imageFile)}">` : "Image<br>(facultative)";
+    const src = imageFile ? URL.createObjectURL(imageFile) : editing && editing.cover ? editing.cover : null;
+    slot.classList.toggle("filled", !!src);
+    slot.innerHTML = src ? `<img alt="" src="${esc(src)}">` : editing ? "Ajouter<br>une image" : "Image<br>(facultative)";
+  }
+  /* Passe le formulaire en mode « Modifier » (entry) ou « Nouveau morceau » (null) */
+  function setMode(entry) {
+    editing = entry; audioFile = imageFile = null;
+    $("#upTitle").value = entry ? entry.title || prettify(baseName(entry.file)) : "";
+    $("#upDesc").value = entry ? entry.description || "" : "";
+    $("#formTitle").textContent = entry ? `Modifier « ${entry.title || baseName(entry.file)} »` : "Nouveau morceau";
+    $("#upSend").textContent = entry ? "Enregistrer les modifications" : "Mettre en ligne";
+    $("#upReset").textContent = entry ? "Annuler" : "Vider";
+    $("#drop b").textContent = entry ? "Glisse ici une nouvelle image (ou un nouveau son)" : "Glisse ici ton son et son image";
+    status(""); paint();
+    if (entry) $("#formPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   function take(files) {
     for (const f of files) {
@@ -998,7 +1017,7 @@ function renderUpload() {
   function stop(e) { e.preventDefault(); }
   window.addEventListener("dragover", stop); window.addEventListener("drop", stop);
 
-  $("#upReset").addEventListener("click", () => { audioFile = imageFile = null; $("#upTitle").value = ""; $("#upDesc").value = ""; status(""); paint(); });
+  $("#upReset").addEventListener("click", () => setMode(null));
   $("#tokenForget").addEventListener("click", () => { if (confirm("Oublier la clé GitHub sur cet appareil ?")) { ls.set("pl:ghtoken", ""); renderUpload(); } });
 
   async function loadOnline() {
@@ -1008,8 +1027,9 @@ function renderUpload() {
       ul.innerHTML = list.length ? list.map((t, i) => `
         <li><span class="rank-cover">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : `<div class="cover-placeholder">${I.note}</div>`}</span>
           <span class="rank-title">${esc(t.title || baseName(t.file))}<small>${esc(t.file)}</small></span>
-          <button class="del-btn" data-i="${i}">Supprimer</button></li>`).join("")
+          <span class="row-actions"><button class="edit-btn" data-edit="${i}">Modifier</button><button class="del-btn" data-i="${i}">Supprimer</button></span></li>`).join("")
         : `<li class="upload-status" style="display:block;border:0;background:none">Aucun morceau pour l'instant.</li>`;
+      $$("[data-edit]", ul).forEach(b => b.addEventListener("click", () => { if (!busy) setMode(list[+b.dataset.edit]); }));
       $$("[data-i]", ul).forEach(b => b.addEventListener("click", async () => {
         const t = list[+b.dataset.i];
         if (busy || !confirm(`Supprimer « ${t.title || t.file} » du site ? Le son et son image seront retirés.`)) return;
@@ -1020,6 +1040,7 @@ function renderUpload() {
           if (t.cover && t.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: t.cover, remove: true });
           await ghCommit(changes, `Supprime le morceau « ${t.title || t.file} »`);
           toast("Morceau supprimé (le site se met à jour dans ~1 min)");
+          if (editing && editing.file === t.file) setMode(null);
           loadOnline();
         } catch (e) { console.error(e); toast("Suppression impossible : " + e.message); b.textContent = "Supprimer"; }
         busy = false;
@@ -1034,19 +1055,53 @@ function renderUpload() {
   $("#upSend").addEventListener("click", async () => {
     if (busy) return;
     const title = $("#upTitle").value.trim();
-    if (!audioFile) return status("Ajoute d'abord un fichier son.", "err");
+    const desc = $("#upDesc").value.trim();
+    if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
-    if (audioFile.size > 95 * 1048576) return status("Fichier trop lourd (plus de 95 Mo).", "err");
+    if (audioFile && audioFile.size > 95 * 1048576) return status("Fichier trop lourd (plus de 95 Mo).", "err");
     busy = true; $("#upSend").disabled = true;
     try {
       status("Préparation…");
       const list = await ghReadTracks();
+
+      /* --- Modification d'un morceau existant ---
+         Le nom de fichier (et donc l'identifiant du morceau) ne change pas :
+         les commentaires, notes et classements restent attachés au morceau. */
+      if (editing) {
+        const idx = list.findIndex(x => x.file === editing.file);
+        if (idx < 0) throw new Error("ce morceau n'est plus dans la liste (déjà supprimé ?)");
+        const cur = list[idx], base = baseName(cur.file), changes = [];
+        let file = cur.file, cover = cur.cover || null;
+        if (audioFile) {
+          const p = `${CFG.musicFolder}/${base}.${ext(audioFile.name) || "mp3"}`;
+          changes.push({ path: p, file: audioFile, label: `Envoi du nouveau son (${mb(audioFile.size)})` });
+          if (p !== cur.file) changes.push({ path: cur.file, remove: true });
+          file = p;
+        }
+        if (imageFile) {
+          const p = `${CFG.musicFolder}/${base}.${ext(imageFile.name) || "jpg"}`;
+          changes.push({ path: p, file: imageFile, label: "Envoi de l'image" });
+          if (cur.cover && cur.cover !== p && cur.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: cur.cover, remove: true });
+          cover = p;
+        }
+        list[idx] = { file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}) };
+        changes.push({ path: "tracks.json", text: JSON.stringify(list, null, 2) + "\n", label: "Mise à jour de la liste" });
+        await ghCommit(changes, `Modifie le morceau « ${title} »`, s => status(s + "…"));
+        if (audioFile) ls.set("pl:peaks:" + file, null);
+        setMode(null);
+        status(`« ${title} » est modifié ! Le changement apparaîtra sur le site dans environ une minute.`, "ok");
+        toast("Morceau modifié");
+        loadOnline();
+        busy = false; $("#upSend").disabled = false;
+        return;
+      }
+
       const used = new Set(list.flatMap(t => [t.file, t.cover]).filter(Boolean).map(p => baseName(p).toLowerCase()));
       let name = slug(title) || "morceau", n = 2;
       while (used.has(name)) name = `${slug(title) || "morceau"}-${n++}`;
       const audioPath = `${CFG.musicFolder}/${name}.${ext(audioFile.name) || "mp3"}`;
       const imgPath = imageFile ? `${CFG.musicFolder}/${name}.${ext(imageFile.name) || "jpg"}` : null;
-      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...($("#upDesc").value.trim() ? { description: $("#upDesc").value.trim() } : {}) };
+      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...(desc ? { description: desc } : {}) };
       const changes = [{ path: audioPath, file: audioFile, label: `Envoi du son (${mb(audioFile.size)})` }];
       if (imageFile) changes.push({ path: imgPath, file: imageFile, label: "Envoi de l'image" });
       changes.push({ path: "tracks.json", text: JSON.stringify([entry, ...list], null, 2) + "\n", label: "Mise à jour de la liste" });
