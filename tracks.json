@@ -1,5 +1,13 @@
 [
   {
+    "file": "music/vieille-ecole.mp3",
+    "cover": "music/vieille-ecole.png",
+    "title": "Vieille Ecole",
+    "tags": [
+      "hip hop"
+    ]
+  },
+  {
     "id": "saha",
     "file": "music/saha.mp3",
     "cover": "music/saha.png",
