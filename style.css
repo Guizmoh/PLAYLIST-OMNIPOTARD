@@ -641,3 +641,12 @@ body.has-cbar .player { height: auto; row-gap: 10px; }
   .home-columns .grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .home-columns { grid-template-columns: minmax(0, 2.2fr) minmax(440px, 1fr); }
 }
+
+/* ---------- Styles de musique sous les pochettes ---------- */
+.card-styles { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 8px; }
+.style-tag {
+  font-size: 12px; font-weight: 600; color: #cfe0f5; padding: 3px 9px; border-radius: 99px;
+  background: rgba(165, 185, 215, .12); border: 1px solid rgba(165, 185, 215, .22); white-space: nowrap;
+}
+.card-desc { margin: 4px 0 8px; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (min-width: 1200px) { .style-tag { font-size: 13px; padding: 3px 11px; } .card-desc { font-size: 14px; } }

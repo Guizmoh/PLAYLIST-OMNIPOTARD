@@ -373,6 +373,17 @@ async function route() {
 window.addEventListener("hashchange", route);
 
 /* ---------------- Accueil ---------------- */
+/* Styles indiqués à la création (« Ambient, Dub techno ») affichés en étiquettes.
+   Si c'est plutôt une phrase, on l'affiche telle quelle sur deux lignes max. */
+function stylesHTML(t) {
+  const d = (t.description || "").trim();
+  if (!d) return "";
+  const parts = d.split(/\s*[,;\/|·•]\s*|\s+-\s+/).map(s => s.trim()).filter(Boolean);
+  const looksLikeTags = parts.length <= 6 && parts.every(p => p.length <= 24 && p.split(/\s+/).length <= 3);
+  return looksLikeTags
+    ? `<div class="card-styles">${parts.map(p => `<span class="style-tag">${esc(p)}</span>`).join("")}</div>`
+    : `<p class="card-desc">${esc(d)}</p>`;
+}
 function statsHTML(t) {
   const s = state.stats[t.id] || {};
   return `<span class="mini-stats">
@@ -414,6 +425,7 @@ function renderHome(scrollToId) {
           </a>
           <div class="card-body">
             <a href="#/t/${esc(t.id)}" class="card-title">${esc(t.title)}</a>
+            ${stylesHTML(t)}
             <div class="card-meta"><a href="#/t/${esc(t.id)}" class="card-comment">${I.chat} Commenter</a>${statsHTML(t)}</div>
           </div>
         </article>`).join("")}</div>`
@@ -945,8 +957,8 @@ function renderUpload(params = new URLSearchParams()) {
             <div class="audio-file missing" id="audioInfo">${I.note}<span>Aucun son choisi</span></div>
             <label for="upTitle">Titre</label>
             <input id="upTitle" maxlength="120" placeholder="Nom du morceau">
-            <label for="upDesc">Description (facultative)</label>
-            <textarea id="upDesc" maxlength="500" placeholder="Un mot sur le morceau, ce sur quoi tu veux des retours…"></textarea>
+            <label for="upDesc">Styles / description (facultatif)</label>
+            <textarea id="upDesc" maxlength="500" placeholder="Ex : Ambient, Dub techno — sépare les styles par des virgules"></textarea>
           </div>
         </div>
         <div class="upload-actions">
