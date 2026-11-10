@@ -5,6 +5,11 @@
     "title": "Sway"
   },
   {
+    "file": "music/hint.mp3",
+    "cover": "music/hint.jpg",
+    "title": "HINT"
+  },
+  {
     "file": "music/enbad.mp3",
     "title": "Enbad",
     "description": "Embiant, Dub techno"

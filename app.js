@@ -852,7 +852,7 @@ function syncAdmin() { $("#adminPill").hidden = !state.admin; $("#menuAdmin").hi
 const ghRepo = () => CFG.githubRepo || detectRepo();
 const ghToken = () => ls.get("pl:ghtoken", "");
 async function gh(path, opts = {}) {
-  const r = await fetch("https://api.github.com" + path, {
+  const r = await fetch("https://api.github.com" + path, { cache: "no-store",
     method: opts.method || "GET",
     headers: { Authorization: "Bearer " + ghToken(), Accept: "application/vnd.github+json", ...(opts.body ? { "Content-Type": "application/json" } : {}) },
     body: opts.body ? JSON.stringify(opts.body) : undefined
@@ -865,7 +865,9 @@ const fileToBase64 = file => new Promise((ok, ko) => {
 });
 async function ghReadTracks() {
   try {
-    const f = await gh(`/repos/${ghRepo()}/contents/tracks.json?ref=${CFG.githubBranch}`);
+    // lit la liste à la version exacte du dernier commit (évite une copie périmée)
+    const ref = await gh(`/repos/${ghRepo()}/git/ref/heads/${CFG.githubBranch}`);
+    const f = await gh(`/repos/${ghRepo()}/contents/tracks.json?ref=${ref.object.sha}`);
     const bytes = Uint8Array.from(atob(f.content.replace(/\n/g, "")), c => c.charCodeAt(0));
     return JSON.parse(new TextDecoder().decode(bytes) || "[]");
   } catch (e) { if (e.status === 404) return []; throw e; }
