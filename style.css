@@ -691,3 +691,14 @@ a.tag:hover, .tag.on { background: var(--accent); color: #fff; border-color: var
 .creator-btn:active { transform: translateY(2px); }
 .creator-btn svg { width: 17px; height: 17px; }
 @media (max-width: 720px) { .creator-btn span { display: none; } .creator-btn { padding: 8px 10px; } }
+
+/* ---------- Work In Progress ---------- */
+.wip-badge {
+  position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: #2a1405;
+  padding: 3px 8px; border-radius: 7px; background: linear-gradient(180deg, #ffd08a, #f39a2b);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 2px 0 #9a5a0d;
+}
+.wip-badge.inline { position: static; display: inline-block; vertical-align: 2px; font-size: 10px; padding: 1px 6px; margin-left: 4px; box-shadow: none; }
+.wip-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: #c9d6ee; cursor: pointer; margin-top: 4px; padding: 10px 12px; border-radius: 10px; background: rgba(243, 154, 43, .1); border: 1px solid rgba(243, 154, 43, .3); }
+.wip-check input { width: 18px; height: 18px; margin-top: 1px; accent-color: #f39a2b; flex-shrink: 0; }
+.wip-check b { color: #ffd08a; font-weight: 700; }

@@ -85,7 +85,8 @@ function makeSupabaseStore() {
       return Object.fromEntries(rows.map(r => [r.track_id, { avg: +r.rating_avg || 0, count: r.rating_count || 0, comments: r.comment_count || 0 }]));
     },
     async rate(trackId, stars) { ok(await sb.rpc("rate_track", { p_track: trackId, p_stars: stars, p_voter: voterId })); },
-    async saveRanking(author, ids) { ok(await sb.rpc("save_ranking", { p_voter: voterId, p_author: author || null, p_tracks: ids })); },
+    // scope "wip" : classement séparé des Work In Progress (même table, identifiant suffixé)
+    async saveRanking(author, ids, scope) { ok(await sb.rpc("save_ranking", { p_voter: voterId + (scope ? ":" + scope : ""), p_author: author || null, p_tracks: ids })); },
     async rankings() { return ok(await sb.rpc("admin_rankings")) || []; },
     async login(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); return this.isAdmin(); },
     async logout() { await sb.auth.signOut(); },
@@ -120,9 +121,9 @@ function makeLocalStore() {
       return out;
     },
     async rate(trackId, stars) { const r = ls.get(R, {}); (r[trackId] ??= {})[voterId] = stars; ls.set(R, r); },
-    async saveRanking(author, ids) {
-      const r = ls.get("pl:demo:rankings", {});
-      r[voterId] = { voter: voterId, author: author || null, track_ids: ids, updated_at: new Date().toISOString() };
+    async saveRanking(author, ids, scope) {
+      const r = ls.get("pl:demo:rankings", {}), v = voterId + (scope ? ":" + scope : "");
+      r[v] = { voter: v, author: author || null, track_ids: ids, updated_at: new Date().toISOString() };
       ls.set("pl:demo:rankings", r);
     },
     async rankings() { return Object.values(ls.get("pl:demo:rankings", {})).sort((a, b) => b.updated_at.localeCompare(a.updated_at)); },
@@ -175,7 +176,8 @@ async function loadTracks() {
       artist: t.artist || CFG.artist || "",
       file, cover: t.cover || images[b.toLowerCase()] || null,
       description: t.description || "",
-      tags: cleanTags(t.tags)
+      tags: cleanTags(t.tags),
+      wip: !!t.wip
     });
   };
   manual.forEach(add);
@@ -363,9 +365,10 @@ async function route() {
   const [path, query] = h.split("?");
   const parts = path.split("/");
   const params = new URLSearchParams(query || "");
-  const key = ["admin", "classement", "ajouter"].includes(parts[0]) ? parts[0] : "home";
+  const key = ["admin", "classement", "ajouter", "wip"].includes(parts[0]) ? parts[0] : "home";
   $$("#menu a").forEach(a => a.classList.toggle("on", a.dataset.route === key));
   syncCommentBar();
+  if (parts[0] === "wip") return renderHome(parts[1] === "classement" ? "classement" : null, true);
   if (parts[0] === "t" && byId(parts[1])) return renderTrack(byId(parts[1]), params);
   if (parts[0] === "tag" && parts[1]) return renderTag(decodeURIComponent(parts[1]));
   if (parts[0] === "admin") return renderAdmin();
@@ -390,7 +393,7 @@ const tagsHTML = (t, cls = "") => t.tags && t.tags.length ? `<div class="tags ${
 function cardHTML(t) {
   return `
     <article class="card">
-      <a href="#/t/${esc(t.id)}" class="card-cover">${coverHTML(t)}
+      <a href="#/t/${esc(t.id)}" class="card-cover">${coverHTML(t)}${t.wip ? `<span class="wip-badge">W.I.P.</span>` : ""}
         <button class="play-btn" data-play="${esc(t.id)}" aria-label="Lire ${esc(t.title)}">${I.play}</button>
       </a>
       <div class="card-body">
@@ -405,7 +408,7 @@ function cardHTML(t) {
 function renderTag(tag) {
   tag = cleanTags([tag])[0] || tag;
   document.title = "#" + tag + " · " + CFG.siteTitle;
-  const list = orderedTracks().filter(t => t.tags.includes(tag));
+  const list = [...orderedTracks(false), ...orderedTracks(true)].filter(t => t.tags.includes(tag));
   const all = [...new Set(state.tracks.flatMap(t => t.tags))].sort();
   $("#app").innerHTML = `
     <a href="#/" class="back">${I.back} Tous les morceaux</a>
@@ -435,12 +438,14 @@ function statsHTML(t) {
     ${s.count ? `<span><span class="star">${I.star}</span>${s.avg.toFixed(1)}</span>` : ""}
     ${state.admin ? `<span>${I.chat}${s.comments || 0}</span>` : ""}</span>`;
 }
-/* Ordre personnel du visiteur (s'il a fait son classement) */
-function orderedTracks() {
-  const mine = ls.get("pl:myorder", null);
-  if (!mine) return state.tracks;
+/* Ordre personnel du visiteur (s'il a fait son classement) — séparé pour les W.I.P. */
+const orderKey = wip => wip ? "pl:myorder:wip" : "pl:myorder";
+function orderedTracks(wip = false) {
+  const base = state.tracks.filter(t => t.wip === wip);
+  const mine = ls.get(orderKey(wip), null);
+  if (!mine) return base;
   const pos = id => { const i = mine.indexOf(id); return i < 0 ? 1e9 : i; };
-  return [...state.tracks].sort((a, b) => pos(a.id) - pos(b.id));
+  return [...base].sort((a, b) => pos(a.id) - pos(b.id));
 }
 const feedbackHTML = () => CFG.feedbackNote ? `
   <div class="panel welcome">
@@ -448,39 +453,41 @@ const feedbackHTML = () => CFG.feedbackNote ? `
     <div><div class="welcome-title">${esc(CFG.feedbackTitle || "")}</div><p>${esc(CFG.feedbackNote)}</p></div>
   </div>` : "";
 
-function renderHome(scrollToId) {
-  document.title = CFG.siteTitle;
+/* Page d'accueil (morceaux) ou page « Work In Progress » (wip = true) : même mise en page, listes et classements séparés */
+function renderHome(scrollToId, wip = false) {
+  document.title = (wip ? "Work In Progress · " : "") + CFG.siteTitle;
   const app = $("#app");
-  const tracks = orderedTracks();
-  const hasOrder = !!ls.get("pl:myorder", null);
+  const tracks = orderedTracks(wip);
+  const hasOrder = !!ls.get(orderKey(wip), null);
   app.innerHTML = `
     <section class="hero">
-      <h1>${esc(CFG.siteTitle)}</h1>
-      ${CFG.intro ? `<p>${esc(CFG.intro)}</p>` : ""}
+      <h1>${wip ? "Work In Progress" : esc(CFG.siteTitle)}</h1>
+      ${wip ? `<p>${esc(CFG.wipIntro || "Des morceaux en cours de création. Dis-moi lesquels tu préfères : ça m'aide à choisir ceux que je vais terminer.")}</p>` : CFG.intro ? `<p>${esc(CFG.intro)}</p>` : ""}
+      ${wip && state.admin ? `<p style="margin-top:16px"><a class="btn" href="#/ajouter?wip=1">+ Ajouter un W.I.P.</a></p>` : ""}
     </section>
     ${feedbackHTML()}
     ${store.demo && state.admin ? `<p class="notice">Mode démo : les commentaires sont enregistrés uniquement dans ce navigateur. Renseigne Supabase dans <code>config.js</code> pour les partager (voir README).</p>` : ""}
     <div class="home-columns${tracks.length > 1 ? "" : " single"}">
     <section class="home-section" id="morceaux">
-      <div class="list-bar"><h2>Les morceaux${hasOrder ? `<span class="order-tag">· dans ton ordre de préférence</span>` : ""}</h2></div>
+      <div class="list-bar"><h2>${wip ? "Les W.I.P." : "Les morceaux"}${hasOrder ? `<span class="order-tag">· dans ton ordre de préférence</span>` : ""}</h2></div>
       ${tracks.length ? `<div class="grid">${tracks.map(cardHTML).join("")}</div>`
-      : `<p class="empty">Aucun morceau pour l'instant. Dépose tes fichiers MP3 ou WAV dans le dossier <b>${esc(CFG.musicFolder)}/</b>.</p>`}
+      : `<p class="empty">${wip ? "Aucun morceau en cours pour l'instant." : "Aucun morceau pour l'instant."}</p>`}
     </section>
     ${tracks.length > 1 ? `<section class="home-section" id="classement">
-      <div class="list-bar"><h2>Mon classement</h2></div>
-      ${rankingHTML(tracks)}
+      <div class="list-bar"><h2>${wip ? "Mon classement W.I.P." : "Mon classement"}</h2></div>
+      ${rankingHTML(tracks, wip)}
     </section>` : ""}
     </div>`;
   $$("[data-play]", app).forEach(b => b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggle(byId(b.dataset.play)); }));
-  if (tracks.length > 1) setupRanking();
+  if (tracks.length > 1) setupRanking(wip);
   syncPlayButtons();
   if (scrollToId) requestAnimationFrame(() => $("#" + scrollToId)?.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 /* ---------------- Classement (glisser-déposer) ---------------- */
-function rankingHTML(tracks) {
+function rankingHTML(tracks, wip = false) {
   return `<section class="panel rank-panel">
-    <p class="rank-help"><b>Aide-moi à choisir lequel terminer et poster en premier !</b> Glisse les morceaux avec la poignée <b>⋮⋮</b> (ou utilise les flèches) dans ton ordre de préférence — ton préféré tout en haut.</p>
+    <p class="rank-help"><b>${wip ? "Lequel de ces W.I.P. dois-je terminer en priorité ?" : "Aide-moi à choisir lequel terminer et poster en premier !"}</b> Glisse les morceaux avec la poignée <b>⋮⋮</b> (ou utilise les flèches) dans ton ordre de préférence — ton préféré tout en haut.</p>
     <ol class="rank-list well" id="rankList">${tracks.map(t => `
       <li class="rank-item" data-id="${esc(t.id)}">
         <span class="rank-handle" aria-label="Déplacer ${esc(t.title)}">${I.grip}</span>
@@ -497,7 +504,7 @@ function rankingHTML(tracks) {
   </section>`;
 }
 
-function setupRanking() {
+function setupRanking(wip = false) {
   const list = $("#rankList");
   const renumber = () => [...list.children].forEach((li, i, all) => {
     li.querySelector(".rank-pos").textContent = i + 1;
@@ -538,16 +545,16 @@ function setupRanking() {
     handle.addEventListener("pointercancel", up);
   });
 
-  $("#rankCancel").addEventListener("click", () => renderHome("classement"));
+  $("#rankCancel").addEventListener("click", () => renderHome("classement", wip));
   $("#rankSave").addEventListener("click", async () => {
     const ids = [...list.children].map(li => li.dataset.id);
     const name = $("#rankName").value.trim(); ls.set("pl:name", name);
     $("#rankSave").disabled = true;
     try {
-      await store.saveRanking(name, ids);
-      ls.set("pl:myorder", ids);
+      await store.saveRanking(name, ids, wip ? "wip" : undefined);
+      ls.set(orderKey(wip), ids);
       toast("Classement enregistré, merci !");
-      renderHome("morceaux");
+      renderHome("morceaux", wip);
     } catch (err) { console.error(err); toast("Le classement n'a pas pu être enregistré"); $("#rankSave").disabled = false; }
   });
 }
@@ -830,22 +837,12 @@ async function renderAdmin() {
   }
 
   const all = await store.comments(null, true).catch(() => []);
-  const rankings = await store.rankings().catch(() => []);
-  const board = rankingBoard(rankings);
-  const s = Object.values(state.stats);
-  const votes = s.reduce((a, x) => a + (x.count || 0), 0);
-  const avg = votes ? s.reduce((a, x) => a + x.avg * x.count, 0) / votes : 0;
-  app.innerHTML = `
-    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p><p style="margin-top:16px"><a class="btn" href="#/ajouter">+ Ajouter un morceau</a></p></section>
-    ${store.demo ? `<p class="notice">Mode démo : rien n'est partagé tant que Supabase n'est pas configuré dans <code>config.js</code>.</p>` : ""}
-    <div class="admin-stats">
-      <div class="stat"><b>${state.tracks.length}</b><span>morceaux</span></div>
-      <div class="stat"><b>${all.length}</b><span>commentaires</span></div>
-      <div class="stat"><b>${votes ? avg.toFixed(1) : "–"}</b><span>note moyenne (${votes})</span></div>
-    </div>
-    <h2 class="section-title">Classement des auditeurs <small>${rankings.length}</small></h2>
+  const allRankings = await store.rankings().catch(() => []);
+  const isWipRanking = r => String(r.voter || "").endsWith(":wip");
+  const boardSection = (title, rankings, wip) => `
+    <h2 class="section-title">${title} <small>${rankings.length}</small></h2>
     ${rankings.length ? `
-      <ol class="board">${board.map((b, i) => `
+      <ol class="board">${rankingBoard(rankings, wip).map((b, i) => `
         <li class="panel"><span class="rank-pos">${i + 1}</span>
           <a href="#/t/${esc(b.id)}" class="rank-title">${esc(b.title)}</a>
           <span class="score" title="Score de préférence"><i style="width:${Math.round(b.score * 100)}%"></i></span>
@@ -857,7 +854,20 @@ async function renderAdmin() {
           <span class="comment-date">${esc(ago(r.updated_at))}</span>
           <ol>${r.track_ids.map(id => `<li>${esc(byId(id)?.title || id)}</li>`).join("")}</ol>
         </div>`).join("")}</div>`
-    : `<p class="empty">Personne n'a encore classé tes morceaux.</p>`}
+    : `<p class="empty">Personne n'a encore fait ce classement.</p>`}`;
+  const s = Object.values(state.stats);
+  const votes = s.reduce((a, x) => a + (x.count || 0), 0);
+  const avg = votes ? s.reduce((a, x) => a + x.avg * x.count, 0) / votes : 0;
+  app.innerHTML = `
+    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p><p style="margin-top:16px"><a class="btn" href="#/ajouter">+ Ajouter un morceau</a></p></section>
+    ${store.demo ? `<p class="notice">Mode démo : rien n'est partagé tant que Supabase n'est pas configuré dans <code>config.js</code>.</p>` : ""}
+    <div class="admin-stats">
+      <div class="stat"><b>${state.tracks.length}</b><span>morceaux</span></div>
+      <div class="stat"><b>${all.length}</b><span>commentaires</span></div>
+      <div class="stat"><b>${votes ? avg.toFixed(1) : "–"}</b><span>note moyenne (${votes})</span></div>
+    </div>
+    ${boardSection("Classement des auditeurs — Morceaux", allRankings.filter(r => !isWipRanking(r)), false)}
+    ${boardSection("Classement des auditeurs — W.I.P.", allRankings.filter(isWipRanking), true)}
     <h2 class="section-title">Derniers commentaires <small>${all.length}</small></h2>
     <ul class="comments">${all.slice(0, 50).map(c => {
       const t = byId(c.track_id), name = c.author || "Anonyme";
@@ -881,7 +891,7 @@ async function renderAdmin() {
   $("#logout").addEventListener("click", async () => { await store.logout(); state.admin = false; syncAdmin(); location.hash = "#/"; });
 }
 /* Classement global : pour chaque liste, le 1er vaut 100 %, le dernier 0 % ; on fait la moyenne. */
-function rankingBoard(rankings) {
+function rankingBoard(rankings, wip = false) {
   const acc = {};
   for (const r of rankings) {
     const ids = r.track_ids.filter(byId), n = ids.length;
@@ -890,7 +900,7 @@ function rankingBoard(rankings) {
       a.sum += n > 1 ? 1 - i / (n - 1) : 1; a.votes++; if (i === 0) a.firsts++;
     });
   }
-  return state.tracks.map(t => {
+  return state.tracks.filter(t => t.wip === wip).map(t => {
     const a = acc[t.id] || { sum: 0, votes: 0, firsts: 0 };
     return { id: t.id, title: t.title, score: a.votes ? a.sum / a.votes : 0, firsts: a.firsts, votes: a.votes };
   }).sort((x, y) => y.score - x.score || y.firsts - x.firsts);
@@ -1043,6 +1053,7 @@ function renderUpload(params = new URLSearchParams()) {
             <textarea id="upDesc" maxlength="500" placeholder="Un mot sur le morceau, ce sur quoi tu veux des retours…"></textarea>
             <label for="upTagInput">Tags <span style="font-weight:500">(4 max — Entrée ou virgule pour valider)</span></label>
             <div class="tag-input" id="tagBox"><span id="tagChips" class="tags"></span><input id="upTagInput" maxlength="24" placeholder="ambient, dub techno…"></div>
+            <label class="wip-check"><input type="checkbox" id="upWip"${params.get("wip") === "1" ? " checked" : ""}> <span><b>Work In Progress (W.I.P.)</b> — affiché sur la page W.I.P., avec son propre classement</span></label>
           </div>
         </div>
         <div class="upload-actions">
@@ -1083,6 +1094,7 @@ function renderUpload(params = new URLSearchParams()) {
     $("#upTitle").value = entry ? entry.title || prettify(baseName(entry.file)) : "";
     $("#upDesc").value = entry ? entry.description || "" : "";
     upTags = entry ? cleanTags(entry.tags) : []; $("#upTagInput").value = ""; paintTags();
+    $("#upWip").checked = entry ? !!entry.wip : params.get("wip") === "1";
     $("#formTitle").textContent = entry ? `Modifier « ${entry.title || baseName(entry.file)} »` : "Nouveau morceau";
     $("#upSend").textContent = entry ? "Enregistrer les modifications" : "Mettre en ligne";
     $("#upReset").textContent = entry ? "Annuler" : "Vider";
@@ -1151,7 +1163,7 @@ function renderUpload(params = new URLSearchParams()) {
       const list = await ghReadTracks();
       ul.innerHTML = list.length ? list.map((t, i) => `
         <li><span class="rank-cover">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : `<div class="cover-placeholder">${I.note}</div>`}</span>
-          <span class="rank-title">${esc(t.title || baseName(t.file))}<small>${esc(t.file)}</small></span>
+          <span class="rank-title">${esc(t.title || baseName(t.file))}${t.wip ? ` <span class="wip-badge inline">W.I.P.</span>` : ""}<small>${esc(t.file)}</small></span>
           <span class="row-actions"><button class="edit-btn" data-edit="${i}">Modifier</button><button class="del-btn" data-i="${i}">Supprimer</button></span></li>`).join("")
         : `<li class="upload-status" style="display:block;border:0;background:none">Aucun morceau pour l'instant.</li>`;
       $$("[data-edit]", ul).forEach(b => b.addEventListener("click", () => { if (!busy) setMode(list[+b.dataset.edit]); }));
@@ -1188,6 +1200,7 @@ function renderUpload(params = new URLSearchParams()) {
     const desc = $("#upDesc").value.trim();
     if ($("#upTagInput").value.trim()) addTag($("#upTagInput").value);
     const tags = upTags.slice(0, 4);
+    const wipExtra = $("#upWip").checked ? { wip: true } : {};
     if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
     if (audioFile && audioFile.size > MAX_UPLOAD && ext(audioFile.name) === "mp3") return status("Ce MP3 dépasse 35 Mo : exporte-le dans un débit plus bas.", "err");
@@ -1229,7 +1242,7 @@ function renderUpload(params = new URLSearchParams()) {
           if (cur.cover && cur.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: cur.cover, remove: true });
           cover = p;
         }
-        list[idx] = { id, file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}) };
+        list[idx] = { id, file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}), ...wipExtra };
         changes.push({ path: "tracks.json", text: JSON.stringify(list, null, 2) + "\n", label: "Mise à jour de la liste" });
         await ghCommit(changes, `Modifie le morceau « ${title} »`, s => status(s + "…"));
         if (audioFile) ls.set("pl:peaks:" + file, null);
@@ -1246,7 +1259,7 @@ function renderUpload(params = new URLSearchParams()) {
       while (used.has(name)) name = `${slug(title) || "morceau"}-${n++}`;
       const audioPath = `${CFG.musicFolder}/${name}.${ext(audioFile.name) || "mp3"}`;
       const imgPath = imageFile ? `${CFG.musicFolder}/${name}.${ext(imageFile.name) || "jpg"}` : null;
-      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}) };
+      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}), ...wipExtra };
       const changes = [{ path: audioPath, file: audioFile, label: `Envoi du son (${mb(audioFile.size)})` }];
       if (imageFile) changes.push({ path: imgPath, file: imageFile, label: "Envoi de l'image" });
       changes.push({ path: "tracks.json", text: JSON.stringify([entry, ...list], null, 2) + "\n", label: "Mise à jour de la liste" });
