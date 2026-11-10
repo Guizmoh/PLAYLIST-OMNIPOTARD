@@ -18,8 +18,8 @@ window.PLAYLIST_CONFIG = {
   // ---- Supabase (pour que les commentaires soient partagés entre tous les visiteurs)
   // Laisse vide pour tester : les commentaires seront alors stockés seulement
   // dans ton navigateur (mode démo). Voir README.md pour la mise en place (5 min).
-  supabaseUrl: "",       // ex: "https://abcdxyz.supabase.co"
-  supabaseAnonKey: "",   // ex: "eyJhbGciOi..." (clé "anon public", pas la "service_role" !)
+  supabaseUrl: "https://izhywhxxmmjzcacqxbjl.supabase.co",
+  supabaseAnonKey: "sb_publishable_Z4GOeIUWo4jFKkoYCC7_lA_7FL9gSmR",   // clé publique (jamais la "secret" / "service_role" !)
 
   // ---- Détection automatique des morceaux sur GitHub
   // Si le site est publié sur GitHub Pages, tous les fichiers audio déposés
