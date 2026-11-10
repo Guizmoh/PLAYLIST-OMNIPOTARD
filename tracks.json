@@ -11,7 +11,8 @@
   },
   {
     "file": "music/enbad.mp3",
-    "title": "Enbad",
+    "cover": "music/enbad.jpg",
+    "title": "EnBad",
     "description": "Embiant, Dub techno"
   }
 ]
