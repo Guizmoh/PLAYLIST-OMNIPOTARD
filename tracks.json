@@ -1,8 +1,10 @@
 [
   {
+    "id": "be-happy",
     "file": "music/be-happy.mp3",
     "cover": "music/be-happy.jpg",
     "title": "Be happy",
+    "description": "Délire chanté, reprise de Bob Marley (chanteur niche) \nA écouté pour être be happy \nPS : je sait pour le chant faux et soucis vocal",
     "tags": [
       "vocal",
       "pop",
