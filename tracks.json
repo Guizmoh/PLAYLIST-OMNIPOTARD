@@ -1,5 +1,11 @@
 [
   {
+    "file": "music/coeur-perdu.mp3",
+    "cover": "music/coeur-perdu.jpg",
+    "title": "Coeur perdu",
+    "description": "Trip-hop, Cinematic"
+  },
+  {
     "id": "sway",
     "file": "music/sway.mp3",
     "cover": "music/sway-mwa9nzlh.png",
