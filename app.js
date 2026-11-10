@@ -1079,21 +1079,26 @@ function renderUpload(params = new URLSearchParams()) {
       if (editing) {
         const idx = list.findIndex(x => x.file === editing.file);
         if (idx < 0) throw new Error("ce morceau n'est plus dans la liste (déjà supprimé ?)");
-        const cur = list[idx], base = baseName(cur.file), changes = [];
+        const cur = list[idx], changes = [];
+        // L'identifiant du morceau est figé (les commentaires y sont rattachés),
+        // et chaque nouveau fichier reçoit un nom unique : sinon navigateurs et
+        // GitHub continueraient d'afficher l'ancienne image / l'ancien son en cache.
+        const id = cur.id || slug(baseName(cur.file));
+        const stem = `${CFG.musicFolder}/${id}-${Date.now().toString(36)}`;
         let file = cur.file, cover = cur.cover || null;
         if (audioFile) {
-          const p = `${CFG.musicFolder}/${base}.${ext(audioFile.name) || "mp3"}`;
+          const p = `${stem}.${ext(audioFile.name) || "mp3"}`;
           changes.push({ path: p, file: audioFile, label: `Envoi du nouveau son (${mb(audioFile.size)})` });
-          if (p !== cur.file) changes.push({ path: cur.file, remove: true });
+          changes.push({ path: cur.file, remove: true });
           file = p;
         }
         if (imageFile) {
-          const p = `${CFG.musicFolder}/${base}.${ext(imageFile.name) || "jpg"}`;
+          const p = `${stem}.${ext(imageFile.name) || "jpg"}`;
           changes.push({ path: p, file: imageFile, label: "Envoi de l'image" });
-          if (cur.cover && cur.cover !== p && cur.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: cur.cover, remove: true });
+          if (cur.cover && cur.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: cur.cover, remove: true });
           cover = p;
         }
-        list[idx] = { file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}) };
+        list[idx] = { id, file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}) };
         changes.push({ path: "tracks.json", text: JSON.stringify(list, null, 2) + "\n", label: "Mise à jour de la liste" });
         await ghCommit(changes, `Modifie le morceau « ${title} »`, s => status(s + "…"));
         if (audioFile) ls.set("pl:peaks:" + file, null);
@@ -1105,7 +1110,7 @@ function renderUpload(params = new URLSearchParams()) {
         return;
       }
 
-      const used = new Set(list.flatMap(t => [t.file, t.cover]).filter(Boolean).map(p => baseName(p).toLowerCase()));
+      const used = new Set([...list.flatMap(t => [t.file, t.cover]).filter(Boolean).map(p => baseName(p).toLowerCase()), ...list.map(t => t.id).filter(Boolean)]);
       let name = slug(title) || "morceau", n = 2;
       while (used.has(name)) name = `${slug(title) || "morceau"}-${n++}`;
       const audioPath = `${CFG.musicFolder}/${name}.${ext(audioFile.name) || "mp3"}`;
