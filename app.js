@@ -174,7 +174,8 @@ async function loadTracks() {
       title: t.title || prettify(b),
       artist: t.artist || CFG.artist || "",
       file, cover: t.cover || images[b.toLowerCase()] || null,
-      description: t.description || ""
+      description: t.description || "",
+      tags: cleanTags(t.tags)
     });
   };
   manual.forEach(add);
@@ -366,11 +367,55 @@ async function route() {
   $$("#menu a").forEach(a => a.classList.toggle("on", a.dataset.route === key));
   syncCommentBar();
   if (parts[0] === "t" && byId(parts[1])) return renderTrack(byId(parts[1]), params);
+  if (parts[0] === "tag" && parts[1]) return renderTag(decodeURIComponent(parts[1]));
   if (parts[0] === "admin") return renderAdmin();
   if (parts[0] === "ajouter") return renderUpload(params);
   renderHome(key === "classement" ? "classement" : null);
 }
 window.addEventListener("hashchange", route);
+
+/* ---------------- Tags (4 max par morceau, cliquables) ---------------- */
+function cleanTags(list) {
+  const out = [];
+  for (let s of Array.isArray(list) ? list : String(list || "").split(/[,;#\n]+/)) {
+    s = String(s).replace(/^#+/, "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 24);
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length === 4) break;
+  }
+  return out;
+}
+const tagHTML = (tag, cls = "") => `<a class="tag ${cls}" href="#/tag/${encodeURIComponent(tag)}">#${esc(tag)}</a>`;
+const tagsHTML = (t, cls = "") => t.tags && t.tags.length ? `<div class="tags ${cls}">${t.tags.map(x => tagHTML(x)).join("")}</div>` : "";
+
+function cardHTML(t) {
+  return `
+    <article class="card">
+      <a href="#/t/${esc(t.id)}" class="card-cover">${coverHTML(t)}
+        <button class="play-btn" data-play="${esc(t.id)}" aria-label="Lire ${esc(t.title)}">${I.play}</button>
+      </a>
+      <div class="card-body">
+        <a href="#/t/${esc(t.id)}" class="card-title">${esc(t.title)}</a>
+        ${t.tags.length ? tagsHTML(t, "card-tags") : stylesHTML(t)}
+        <div class="card-meta"><a href="#/t/${esc(t.id)}" class="card-comment">${I.chat} Commenter</a>${statsHTML(t)}</div>
+      </div>
+    </article>`;
+}
+
+/* Page « tous les morceaux du tag » */
+function renderTag(tag) {
+  tag = cleanTags([tag])[0] || tag;
+  document.title = "#" + tag + " · " + CFG.siteTitle;
+  const list = orderedTracks().filter(t => t.tags.includes(tag));
+  const all = [...new Set(state.tracks.flatMap(t => t.tags))].sort();
+  $("#app").innerHTML = `
+    <a href="#/" class="back">${I.back} Tous les morceaux</a>
+    <section class="hero" style="padding-top:8px"><h1>#${esc(tag)}</h1>
+      <p>${list.length} morceau${list.length > 1 ? "x" : ""} avec ce tag</p></section>
+    ${all.length > 1 ? `<div class="tags tag-cloud">${all.map(x => tagHTML(x, x === tag ? "on" : "")).join("")}</div>` : ""}
+    ${list.length ? `<div class="grid tag-grid">${list.map(cardHTML).join("")}</div>` : `<p class="empty">Aucun morceau avec ce tag.</p>`}`;
+  $$("[data-play]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggle(byId(b.dataset.play)); }));
+  syncPlayButtons();
+}
 
 /* ---------------- Accueil ---------------- */
 /* Styles indiqués à la création (« Ambient, Dub techno ») affichés en étiquettes.
@@ -418,17 +463,7 @@ function renderHome(scrollToId) {
     <div class="home-columns${tracks.length > 1 ? "" : " single"}">
     <section class="home-section" id="morceaux">
       <div class="list-bar"><h2>Les morceaux${hasOrder ? `<span class="order-tag">· dans ton ordre de préférence</span>` : ""}</h2></div>
-      ${tracks.length ? `<div class="grid">${tracks.map(t => `
-        <article class="card">
-          <a href="#/t/${esc(t.id)}" class="card-cover">${coverHTML(t)}
-            <button class="play-btn" data-play="${esc(t.id)}" aria-label="Lire ${esc(t.title)}">${I.play}</button>
-          </a>
-          <div class="card-body">
-            <a href="#/t/${esc(t.id)}" class="card-title">${esc(t.title)}</a>
-            ${stylesHTML(t)}
-            <div class="card-meta"><a href="#/t/${esc(t.id)}" class="card-comment">${I.chat} Commenter</a>${statsHTML(t)}</div>
-          </div>
-        </article>`).join("")}</div>`
+      ${tracks.length ? `<div class="grid">${tracks.map(cardHTML).join("")}</div>`
       : `<p class="empty">Aucun morceau pour l'instant. Dépose tes fichiers MP3 ou WAV dans le dossier <b>${esc(CFG.musicFolder)}/</b>.</p>`}
     </section>
     ${tracks.length > 1 ? `<section class="home-section" id="classement">
@@ -451,7 +486,7 @@ function rankingHTML(tracks) {
         <span class="rank-handle" aria-label="Déplacer ${esc(t.title)}">${I.grip}</span>
         <span class="rank-pos"></span>
         <span class="rank-cover">${coverHTML(t)}</span>
-        <a href="#/t/${esc(t.id)}" class="rank-title">${esc(t.title)}<small>${esc(t.artist)}</small></a>
+        <span class="rank-title"><a href="#/t/${esc(t.id)}">${esc(t.title)}</a>${t.tags.length ? `<small class="rank-tags">${t.tags.map(x => tagHTML(x, "mini")).join("")}</small>` : `<small>${esc(t.artist)}</small>`}</span>
         <span class="rank-arrows"><button data-dir="-1" aria-label="Monter">${I.up}</button><button data-dir="1" aria-label="Descendre">${I.down}</button></span>
       </li>`).join("")}</ol>
     <div class="form-row">
@@ -532,6 +567,7 @@ function renderTrack(t, params) {
           <div><h1>${esc(t.title)}</h1><div class="track-artist">${esc(t.artist)}</div></div>
         </div>
         ${t.description ? `<p class="track-desc well">${esc(t.description)}</p>` : ""}
+        ${tagsHTML(t, "track-tags")}
         <div class="track-actions well">
           <div class="rating">
             <div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${n <= myVote ? "on" : ""}" aria-label="${n} étoile${n > 1 ? "s" : ""}">${I.star}</button>`).join("")}</div>
@@ -987,8 +1023,10 @@ function renderUpload(params = new URLSearchParams()) {
             <div class="audio-file missing" id="audioInfo">${I.note}<span>Aucun son choisi</span></div>
             <label for="upTitle">Titre</label>
             <input id="upTitle" maxlength="120" placeholder="Nom du morceau">
-            <label for="upDesc">Styles / description (facultatif)</label>
-            <textarea id="upDesc" maxlength="500" placeholder="Ex : Ambient, Dub techno — sépare les styles par des virgules"></textarea>
+            <label for="upDesc">Description (facultative)</label>
+            <textarea id="upDesc" maxlength="500" placeholder="Un mot sur le morceau, ce sur quoi tu veux des retours…"></textarea>
+            <label for="upTagInput">Tags <span style="font-weight:500">(4 max — Entrée ou virgule pour valider)</span></label>
+            <div class="tag-input" id="tagBox"><span id="tagChips" class="tags"></span><input id="upTagInput" maxlength="24" placeholder="ambient, dub techno…"></div>
           </div>
         </div>
         <div class="upload-actions">
@@ -1028,6 +1066,7 @@ function renderUpload(params = new URLSearchParams()) {
     editing = entry; audioFile = imageFile = null;
     $("#upTitle").value = entry ? entry.title || prettify(baseName(entry.file)) : "";
     $("#upDesc").value = entry ? entry.description || "" : "";
+    upTags = entry ? cleanTags(entry.tags) : []; $("#upTagInput").value = ""; paintTags();
     $("#formTitle").textContent = entry ? `Modifier « ${entry.title || baseName(entry.file)} »` : "Nouveau morceau";
     $("#upSend").textContent = entry ? "Enregistrer les modifications" : "Mettre en ligne";
     $("#upReset").textContent = entry ? "Annuler" : "Vider";
@@ -1065,6 +1104,29 @@ function renderUpload(params = new URLSearchParams()) {
   window.addEventListener("dragover", stop); window.addEventListener("drop", stop);
 
   $("#upReset").addEventListener("click", () => setMode(null));
+
+  /* --- Tags : petites étiquettes, 4 maximum --- */
+  let upTags = [];
+  function paintTags() {
+    $("#tagChips").innerHTML = upTags.map((t, i) => `<span class="tag chip">#${esc(t)}<button type="button" data-rm="${i}" aria-label="Retirer ${esc(t)}">×</button></span>`).join("");
+    const inp = $("#upTagInput");
+    inp.disabled = upTags.length >= 4;
+    inp.placeholder = upTags.length >= 4 ? "4 tags maximum" : upTags.length ? "un autre ?" : "ambient, dub techno…";
+  }
+  function addTag(raw) {
+    upTags = cleanTags([...upTags, ...String(raw).split(",")]);
+    $("#upTagInput").value = ""; paintTags();
+  }
+  $("#upTagInput").addEventListener("keydown", e => {
+    const v = e.target.value.trim();
+    if ((e.key === "Enter" || e.key === ",") && v) { e.preventDefault(); addTag(v); }
+    else if (e.key === "Enter") e.preventDefault();
+    else if (e.key === "Backspace" && !e.target.value && upTags.length) { upTags.pop(); paintTags(); }
+  });
+  $("#upTagInput").addEventListener("blur", e => { if (e.target.value.trim()) addTag(e.target.value); });
+  $("#tagChips").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (b) { upTags.splice(+b.dataset.rm, 1); paintTags(); } });
+  $("#tagBox").addEventListener("click", e => { if (e.target.id === "tagBox") $("#upTagInput").focus(); });
+  paintTags();
   $("#tokenForget").addEventListener("click", () => { if (confirm("Oublier la clé GitHub sur cet appareil ?")) { ls.set("pl:ghtoken", ""); renderUpload(); } });
 
   async function loadOnline() {
@@ -1108,6 +1170,8 @@ function renderUpload(params = new URLSearchParams()) {
     if (busy) return;
     const title = $("#upTitle").value.trim();
     const desc = $("#upDesc").value.trim();
+    if ($("#upTagInput").value.trim()) addTag($("#upTagInput").value);
+    const tags = upTags.slice(0, 4);
     if (!audioFile && !editing) return status("Ajoute d'abord un fichier son.", "err");
     if (!title) return status("Donne un titre au morceau.", "err");
     if (audioFile && audioFile.size > MAX_UPLOAD && ext(audioFile.name) === "mp3") return status("Ce MP3 dépasse 35 Mo : exporte-le dans un débit plus bas.", "err");
@@ -1149,7 +1213,7 @@ function renderUpload(params = new URLSearchParams()) {
           if (cur.cover && cur.cover.startsWith(CFG.musicFolder + "/")) changes.push({ path: cur.cover, remove: true });
           cover = p;
         }
-        list[idx] = { id, file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}) };
+        list[idx] = { id, file, ...(cover ? { cover } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}) };
         changes.push({ path: "tracks.json", text: JSON.stringify(list, null, 2) + "\n", label: "Mise à jour de la liste" });
         await ghCommit(changes, `Modifie le morceau « ${title} »`, s => status(s + "…"));
         if (audioFile) ls.set("pl:peaks:" + file, null);
@@ -1166,14 +1230,15 @@ function renderUpload(params = new URLSearchParams()) {
       while (used.has(name)) name = `${slug(title) || "morceau"}-${n++}`;
       const audioPath = `${CFG.musicFolder}/${name}.${ext(audioFile.name) || "mp3"}`;
       const imgPath = imageFile ? `${CFG.musicFolder}/${name}.${ext(imageFile.name) || "jpg"}` : null;
-      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...(desc ? { description: desc } : {}) };
+      const entry = { file: audioPath, ...(imgPath ? { cover: imgPath } : {}), title, ...(desc ? { description: desc } : {}), ...(tags.length ? { tags } : {}) };
       const changes = [{ path: audioPath, file: audioFile, label: `Envoi du son (${mb(audioFile.size)})` }];
       if (imageFile) changes.push({ path: imgPath, file: imageFile, label: "Envoi de l'image" });
       changes.push({ path: "tracks.json", text: JSON.stringify([entry, ...list], null, 2) + "\n", label: "Mise à jour de la liste" });
       await ghCommit(changes, `Ajoute le morceau « ${title} »`, s => status(s + "…"));
       status(`« ${title} » est envoyé ! Il apparaîtra sur le site dans environ une minute.`, "ok");
       toast("Morceau mis en ligne");
-      audioFile = imageFile = null; $("#upTitle").value = ""; $("#upDesc").value = ""; paint();
+      setMode(null);
+      status(`« ${title} » est envoyé ! Il apparaîtra sur le site dans environ une minute.`, "ok");
       loadOnline();
     } catch (e) {
       console.error(e);
