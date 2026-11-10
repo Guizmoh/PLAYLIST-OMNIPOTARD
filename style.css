@@ -652,3 +652,5 @@ body.has-cbar .player { height: auto; row-gap: 10px; }
 @media (min-width: 1200px) { .style-tag { font-size: 13px; padding: 3px 11px; } .card-desc { font-size: 14px; } }
 /* Righteous n'existe qu'en une graisse : pas de faux gras */
 h1, h2, h3, .brand, .card-title, .stat b, .rank-title, .welcome-title, .rank-pos { font-weight: 400; letter-spacing: 0; }
+/* Ombre mi-nette sous le titre du site */
+.hero h1 { text-shadow: 0 3px 0 rgba(8, 16, 32, .55), 0 7px 10px rgba(5, 10, 25, .55), 0 14px 30px rgba(5, 10, 25, .35); }
