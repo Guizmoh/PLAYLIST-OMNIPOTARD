@@ -1,11 +1,9 @@
 [
   {
+    "id": "vieille-ecole",
     "file": "music/vieille-ecole.mp3",
-    "cover": "music/vieille-ecole.png",
-    "title": "Vieille Ecole",
-    "tags": [
-      "hip hop"
-    ]
+    "cover": "music/vieille-ecole-mwac9pft.jpg",
+    "title": "Vieille Ecole"
   },
   {
     "id": "saha",
