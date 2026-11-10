@@ -1,5 +1,16 @@
 [
   {
+    "file": "music/be-happy.mp3",
+    "cover": "music/be-happy.jpg",
+    "title": "Be happy",
+    "tags": [
+      "vocal",
+      "pop",
+      "reggae"
+    ],
+    "wip": true
+  },
+  {
     "id": "vieille-ecole",
     "file": "music/vieille-ecole.mp3",
     "cover": "music/vieille-ecole-mwac9pft.jpg",
