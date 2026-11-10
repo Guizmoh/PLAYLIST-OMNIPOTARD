@@ -1,5 +1,10 @@
 [
   {
+    "file": "music/saha.mp3",
+    "cover": "music/saha.png",
+    "title": "Saha"
+  },
+  {
     "file": "music/high-tunes.mp3",
     "cover": "music/high-tunes.jpg",
     "title": "High tunes"
