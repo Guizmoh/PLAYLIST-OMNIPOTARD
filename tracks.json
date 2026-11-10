@@ -1,5 +1,10 @@
 [
   {
+    "file": "music/long-trip.mp3",
+    "cover": "music/long-trip.png",
+    "title": "Long trip"
+  },
+  {
     "file": "music/plucky.mp3",
     "cover": "music/plucky.png",
     "title": "Plucky"
