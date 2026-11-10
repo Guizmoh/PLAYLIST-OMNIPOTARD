@@ -38,13 +38,9 @@
   {
     "id": "coeur-perdu",
     "file": "music/coeur-perdu.mp3",
-    "cover": "music/coeur-perdu.jpg",
+    "cover": "music/coeur-perdu-mwacdnnw.jpg",
     "title": "Coeur perdu",
-    "description": "Trip-hop, Cinematic",
-    "tags": [
-      "trip hop",
-      "cinematic"
-    ]
+    "description": "Trip-hop, Cinematic"
   },
   {
     "id": "sway",
