@@ -603,3 +603,41 @@ body.has-cbar .player { height: auto; row-gap: 10px; }
 .edit-btn:hover { color: #fff; background: rgba(79, 214, 200, .25); }
 .edit-btn { border: 1px solid rgba(79, 214, 200, .45); color: var(--teal); background: var(--teal-soft); }
 .track-actions .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Grands écrans : tout en plus grand et plus large ---------- */
+@media (min-width: 1200px) {
+  .container { max-width: 1520px; padding: 0 40px; }
+  .player { max-width: 1520px; }
+  .topbar { padding: 14px 40px; }
+  .hero { padding: 56px 0 30px; }
+  .hero h1 { font-size: 64px; }
+  .hero p { font-size: 19px; max-width: 680px; }
+  .welcome { padding: 24px 26px; }
+  .welcome-title { font-size: 20px; }
+  .welcome p { font-size: 16px; }
+  .list-bar h2 { font-size: 26px; }
+  .home-columns { grid-template-columns: minmax(0, 2fr) minmax(400px, 1fr); gap: 36px; }
+  .home-columns .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 28px; }
+  .card { padding: 12px; }
+  .card-title { font-size: 19px; }
+  .card-meta { font-size: 14px; }
+  .home-columns .rank-item { grid-template-columns: 26px 28px 52px minmax(0, 1fr) auto; gap: 10px; padding: 8px 10px; }
+  .home-columns .rank-cover { width: 52px; height: 52px; }
+  .rank-title { font-size: 17px; }
+  .track-layout { grid-template-columns: 400px 1fr; gap: 20px; }
+  .track-head h1 { font-size: 46px; }
+  .track-artist { font-size: 17px; }
+  .track-desc { font-size: 16px; }
+  .play-btn.big { width: 76px; height: 76px; }
+  .play-btn.big svg { width: 30px; height: 30px; }
+  .wave { height: 120px; }
+  .stars button svg { width: 28px; height: 28px; }
+  .section-title { font-size: 24px; }
+  .comment-form textarea, .comment-body { font-size: 16px; }
+  .upload-grid { gap: 22px; }
+}
+@media (min-width: 1700px) {
+  .container, .player { max-width: 1760px; }
+  .home-columns .grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .home-columns { grid-template-columns: minmax(0, 2.2fr) minmax(440px, 1fr); }
+}
