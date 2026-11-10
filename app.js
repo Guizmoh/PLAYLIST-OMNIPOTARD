@@ -193,11 +193,12 @@ function playTrack(t, at) {
     state.current = t;
     audio.src = t.file;
     $("#player").hidden = false;
-    $("#playerCover").src = t.cover || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+    $("#playerCover").src = t.cover || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23213148'/%3E%3Cpath d='M10 6v8.2A2.6 2.6 0 1 0 11.5 16.5V9h4V6z' fill='%235b6f8c'/%3E%3C/svg%3E";
     $("#playerTitle").textContent = t.title;
     $("#playerTitle").href = "#/t/" + t.id;
     $("#playerArtist").textContent = t.artist;
     document.title = t.title + " · " + CFG.siteTitle;
+    pcReset(); syncCommentBar();
   }
   if (at != null) {
     if (audio.readyState >= 1) audio.currentTime = at;
@@ -225,6 +226,7 @@ function syncProgress() {
   $("#playerCurrent").textContent = fmt(c);
   $("#playerDuration").textContent = fmt(d);
   view.onTime?.();
+  pcPaint();
 }
 ["play", "pause", "ended"].forEach(e => audio.addEventListener(e, syncPlayButtons));
 ["timeupdate", "loadedmetadata", "seeked"].forEach(e => audio.addEventListener(e, syncProgress));
@@ -237,6 +239,58 @@ $("#playerBar").addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.code === "Space" && state.current && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)) { e.preventDefault(); toggle(); }
+});
+
+/* ---------------- Bandeau de commentaire sous le lecteur ----------------
+   Visible quand on écoute un morceau sans être sur sa page (ex. depuis l'accueil).
+   Même principe que sur la page du morceau : le moment est capturé quand on
+   commence à écrire, le timecode est grisé et s'active d'un clic. */
+const pc = { locked: false, time: 0, listening: false, active: false };
+function pcReset() { Object.assign(pc, { locked: false, time: 0, listening: false, active: false }); const b = $("#pcBody"); if (b) b.value = ""; pcPaint(); }
+function pcPaint() {
+  const chip = $("#pcChip"); if (!chip) return;
+  $("#pcTime").textContent = "à " + fmt(pc.locked ? pc.time : audio.currentTime || 0);
+  chip.classList.toggle("on", pc.active);
+  chip.setAttribute("aria-pressed", pc.active);
+}
+function syncCommentBar() {
+  const t = state.current;
+  const onItsPage = t && location.hash.replace(/\?.*/, "") === "#/t/" + t.id;
+  const show = !!t && !onItsPage;
+  $("#pcForm").hidden = !show;
+  document.body.classList.toggle("has-cbar", show);
+}
+const pcLock = () => { if (!pc.locked) Object.assign(pc, { locked: true, time: audio.currentTime || 0, listening: (audio.currentTime || 0) > 0 }); };
+$("#pcBody").addEventListener("input", e => {
+  if (e.target.value.trim()) pcLock();
+  else if (!pc.active) pc.locked = false;
+  pcPaint();
+});
+$("#pcChip").addEventListener("click", () => {
+  pcLock(); pc.active = !pc.active;
+  if (!pc.active && !$("#pcBody").value.trim()) pc.locked = false;   // rien d'écrit : le timecode suit à nouveau la lecture
+  pcPaint();
+});
+$("#pcForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const t = state.current, text = $("#pcBody").value.trim();
+  if (!t || !text) return;
+  const c = {
+    track_id: t.id, author: ls.get("pl:name", "") || null, body: text,
+    timecode: pc.active ? Math.round(pc.time * 10) / 10 : null,
+    written_at_position: pc.listening ? Math.round(pc.time * 10) / 10 : null
+  };
+  $("#pcSend").disabled = true;
+  try {
+    await store.addComment(c);
+    const mine = ls.get("pl:mycomments", []);
+    mine.unshift({ id: "me-" + Date.now(), track_id: c.track_id, author: c.author, body: c.body, timecode: c.timecode, created_at: new Date().toISOString() });
+    ls.set("pl:mycomments", mine.slice(0, 300));
+    pcReset();
+    toast(state.admin ? "Commentaire publié" : "Merci ! Ton commentaire a bien été envoyé");
+    state.stats = await store.stats().catch(() => state.stats);
+  } catch (err) { console.error(err); toast("Oups, le commentaire n'a pas pu être envoyé"); }
+  $("#pcSend").disabled = false;
 });
 
 /* Durée d'un morceau sans le lancer */
@@ -310,6 +364,7 @@ async function route() {
   const params = new URLSearchParams(query || "");
   const key = ["admin", "classement", "ajouter"].includes(parts[0]) ? parts[0] : "home";
   $$("#menu a").forEach(a => a.classList.toggle("on", a.dataset.route === key));
+  syncCommentBar();
   if (parts[0] === "t" && byId(parts[1])) return renderTrack(byId(parts[1]), params);
   if (parts[0] === "admin") return renderAdmin();
   if (parts[0] === "ajouter") return renderUpload();
@@ -577,7 +632,9 @@ function renderTrack(t, params) {
   });
   chip.addEventListener("click", () => {
     if (!tc.locked) { tc.locked = true; tc.time = livePos(); tc.listening = state.current === t && audio.currentTime > 0; }
-    tc.active = !tc.active; updateChip();
+    tc.active = !tc.active;
+    if (!tc.active && !body.value.trim()) tc.locked = false;
+    updateChip();
   });
   updateChip();
 
