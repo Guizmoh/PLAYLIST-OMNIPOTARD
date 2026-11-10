@@ -5,9 +5,14 @@
     "title": "Long trip"
   },
   {
+    "id": "plucky",
     "file": "music/plucky.mp3",
     "cover": "music/plucky.png",
-    "title": "Plucky"
+    "title": "Plucky",
+    "tags": [
+      "ambient",
+      "bass"
+    ]
   },
   {
     "file": "music/new-york-my-friend.mp3",
