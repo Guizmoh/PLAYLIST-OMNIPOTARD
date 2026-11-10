@@ -367,7 +367,7 @@ async function route() {
   syncCommentBar();
   if (parts[0] === "t" && byId(parts[1])) return renderTrack(byId(parts[1]), params);
   if (parts[0] === "admin") return renderAdmin();
-  if (parts[0] === "ajouter") return renderUpload();
+  if (parts[0] === "ajouter") return renderUpload(params);
   renderHome(key === "classement" ? "classement" : null);
 }
 window.addEventListener("hashchange", route);
@@ -525,7 +525,10 @@ function renderTrack(t, params) {
             <div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${n <= myVote ? "on" : ""}" aria-label="${n} étoile${n > 1 ? "s" : ""}">${I.star}</button>`).join("")}</div>
             <span class="rating-text" id="ratingText"></span>
           </div>
-          <button class="btn ghost share-btn" id="share">${I.share} Partager</button>
+          <span class="row-actions">
+            ${state.admin ? `<a class="btn ghost share-btn" href="#/ajouter?edit=${encodeURIComponent(t.id)}">✎ Modifier</a>` : ""}
+            <button class="btn ghost share-btn" id="share">${I.share} Partager</button>
+          </span>
         </div>
       </div>
       <div class="panel wave-panel">
@@ -893,7 +896,8 @@ async function ghCommit(changes, message, onStep = () => {}) {
 }
 const mb = n => (n / 1048576).toFixed(1).replace(".", ",") + " Mo";
 
-function renderUpload() {
+function renderUpload(params = new URLSearchParams()) {
+  let pendingEdit = params.get("edit");   // ouvert depuis le bouton « Modifier » d'une page morceau
   document.title = "Ajouter un morceau · " + CFG.siteTitle;
   const app = $("#app");
   if (!ghToken()) {
@@ -1030,6 +1034,11 @@ function renderUpload() {
           <span class="row-actions"><button class="edit-btn" data-edit="${i}">Modifier</button><button class="del-btn" data-i="${i}">Supprimer</button></span></li>`).join("")
         : `<li class="upload-status" style="display:block;border:0;background:none">Aucun morceau pour l'instant.</li>`;
       $$("[data-edit]", ul).forEach(b => b.addEventListener("click", () => { if (!busy) setMode(list[+b.dataset.edit]); }));
+      if (pendingEdit) {
+        const e = list.find(x => (x.id || slug(baseName(x.file))) === pendingEdit);
+        pendingEdit = null;
+        if (e) setMode(e);
+      }
       $$("[data-i]", ul).forEach(b => b.addEventListener("click", async () => {
         const t = list[+b.dataset.i];
         if (busy || !confirm(`Supprimer « ${t.title || t.file} » du site ? Le son et son image seront retirés.`)) return;
