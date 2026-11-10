@@ -1,8 +1,13 @@
 [
   {
+    "id": "long-trip",
     "file": "music/long-trip.mp3",
     "cover": "music/long-trip.png",
-    "title": "Long trip"
+    "title": "Long trip",
+    "tags": [
+      "trip hop",
+      "vocal"
+    ]
   },
   {
     "id": "plucky",
