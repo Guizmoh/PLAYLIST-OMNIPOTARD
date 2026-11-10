@@ -266,6 +266,37 @@ function drawPlayerWave() {
   }
 }
 window.addEventListener("resize", () => drawPlayerWave());
+
+/* ---------------- Volume (mémorisé sur l'appareil) ---------------- */
+(() => {
+  const ICONS = {
+    off: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5l1.4-1.4L20 10.2l2.1-2.1 1.4 1.4-2.1 2.1 2.1 2.1-1.4 1.4-2.1-2.1-2.1 2.1-1.4-1.4 2.1-2.1z"/></svg>',
+    low: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zm12.5 3a3.5 3.5 0 0 0-2-3.2v6.4a3.5 3.5 0 0 0 2-3.2z"/></svg>',
+    high: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zm12.5 3a3.5 3.5 0 0 0-2-3.2v6.4a3.5 3.5 0 0 0 2-3.2zM14.5 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>'
+  };
+  const range = $("#volRange"), btn = $("#volBtn");
+  let last = ls.get("pl:volume", 1);
+  const paint = () => {
+    const v = audio.muted ? 0 : audio.volume;
+    range.value = v;
+    range.style.setProperty("--p", Math.round(v * 100) + "%");
+    btn.innerHTML = v === 0 ? ICONS.off : v < .5 ? ICONS.low : ICONS.high;
+    btn.setAttribute("aria-label", v === 0 ? "Remettre le son" : "Couper le son");
+  };
+  audio.volume = Math.min(1, Math.max(0, +last || 0)); audio.muted = audio.volume === 0;
+  range.addEventListener("input", () => {
+    const v = +range.value;
+    audio.volume = v; audio.muted = v === 0;
+    if (v > 0) last = v;
+    ls.set("pl:volume", v); paint();
+  });
+  btn.addEventListener("click", () => {
+    if (audio.muted || audio.volume === 0) { audio.muted = false; audio.volume = last > 0 ? last : .8; }
+    else { last = audio.volume; audio.muted = true; }
+    ls.set("pl:volume", audio.muted ? 0 : audio.volume); paint();
+  });
+  paint();
+})();
 ["play", "pause", "ended"].forEach(e => audio.addEventListener(e, syncPlayButtons));
 ["timeupdate", "loadedmetadata", "seeked"].forEach(e => audio.addEventListener(e, syncProgress));
 audio.addEventListener("loadedmetadata", () => { if (state.current) state.durations[state.current.id] = audio.duration; });

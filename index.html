@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23e8643c'/%3E%3Cpath d='M12 9v11.2a3.5 3.5 0 1 0 2 3.1V13h6V9z' fill='%23fff'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -50,6 +50,10 @@
       <div class="bar" id="playerBar"><canvas id="playerWave" hidden></canvas><div class="bar-fill" id="playerFill"></div></div>
       <span class="time" id="playerDuration">0:00</span>
     </div>
+    <div class="player-volume">
+      <button class="vol-btn" id="volBtn" type="button" aria-label="Couper le son" title="Couper / remettre le son"></button>
+      <input type="range" id="volRange" min="0" max="1" step="0.01" value="1" aria-label="Volume">
+    </div>
     <!-- Bandeau de commentaire rapide (quand on écoute sans être sur la page du morceau) -->
     <form class="player-comment" id="pcForm" hidden autocomplete="off">
       <button type="button" class="tc-chip" id="pcChip" title="Lier le commentaire à ce moment du morceau">
@@ -64,8 +68,8 @@
 
   <audio id="audio" preload="metadata"></audio>
 
-  <script src="config.js?v=22"></script>
+  <script src="config.js?v=23"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
