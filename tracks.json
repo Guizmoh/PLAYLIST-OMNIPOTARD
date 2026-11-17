@@ -1,5 +1,15 @@
 [
   {
+    "file": "music/sous-la-carapace.mp3",
+    "cover": "music/sous-la-carapace.jpg",
+    "title": "Sous la carapace",
+    "description": "Trip hop mélancolique",
+    "tags": [
+      "trip hop",
+      "embiant"
+    ]
+  },
+  {
     "id": "be-happy",
     "file": "music/be-happy.mp3",
     "cover": "music/be-happy.jpg",
