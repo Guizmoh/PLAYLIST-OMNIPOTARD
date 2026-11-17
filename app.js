@@ -88,6 +88,9 @@ function makeSupabaseStore() {
     // scope "wip" : classement séparé des Work In Progress (même table, identifiant suffixé)
     async saveRanking(author, ids, scope) { ok(await sb.rpc("save_ranking", { p_voter: voterId + (scope ? ":" + scope : ""), p_author: author || null, p_tracks: ids })); },
     async rankings() { return ok(await sb.rpc("admin_rankings")) || []; },
+    // Réservés au créateur (fonctions SQL de supabase-maj-2.sql)
+    async deleteRanking(voter) { ok(await sb.rpc("admin_delete_ranking", { p_voter: voter })); },
+    async ratings() { return ok(await sb.rpc("admin_ratings")) || []; },
     async login(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); return this.isAdmin(); },
     async logout() { await sb.auth.signOut(); },
     async isAdmin() {
@@ -127,6 +130,8 @@ function makeLocalStore() {
       ls.set("pl:demo:rankings", r);
     },
     async rankings() { return Object.values(ls.get("pl:demo:rankings", {})).sort((a, b) => b.updated_at.localeCompare(a.updated_at)); },
+    async deleteRanking(voter) { const r = ls.get("pl:demo:rankings", {}); delete r[voter]; ls.set("pl:demo:rankings", r); },
+    async ratings() { return Object.entries(ls.get(R, {})).flatMap(([track_id, v]) => Object.entries(v).map(([voter, stars]) => ({ track_id, voter, stars }))); },
     async login() { ls.set("pl:demo:admin", true); return true; },
     async logout() { ls.set("pl:demo:admin", false); },
     async isAdmin() { return !!ls.get("pl:demo:admin", false); }
@@ -905,27 +910,42 @@ async function renderAdmin() {
   const all = await store.comments(null, true).catch(() => []);
   const allRankings = await store.rankings().catch(() => []);
   const isWipRanking = r => String(r.voter || "").endsWith(":wip");
-  const boardSection = (title, rankings, wip) => `
-    <h2 class="section-title">${title} <small>${rankings.length}</small></h2>
+  /* Un seul classement compte par nom (le plus récent) ; les anciens restent stockés,
+     simplement marqués « remplacé » et ignorés dans le total. Les anonymes comptent tous. */
+  const markReplaced = list => {
+    const seen = new Set();
+    return [...list].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).map(r => {
+      const key = (r.author || "").trim().toLowerCase();
+      const replaced = !!key && seen.has(key);
+      if (key) seen.add(key);
+      return { ...r, replaced };
+    });
+  };
+  const boardSection = (title, rankingsRaw, wip) => {
+    const rankings = markReplaced(rankingsRaw), active = rankings.filter(r => !r.replaced);
+    return `
+    <h2 class="section-title">${title} <small>${active.length}</small></h2>
     ${rankings.length ? `
-      <ol class="board">${rankingBoard(rankings, wip).map((b, i) => `
+      <ol class="board">${rankingBoard(active, wip).map((b, i) => `
         <li class="panel"><span class="rank-pos">${i + 1}</span>
           <a href="#/t/${esc(b.id)}" class="rank-title">${esc(b.title)}</a>
           <span class="score" title="Score de préférence"><i style="width:${Math.round(b.score * 100)}%"></i></span>
           <span class="meta">${Math.round(b.score * 100)} % · ${b.firsts}× en 1er</span>
         </li>`).join("")}</ol>
       <div class="rankings-grid">${rankings.map(r => `
-        <div class="panel ranking-card">
-          <h3>${esc(r.author || "Anonyme")}</h3>
-          <span class="comment-date">${esc(ago(r.updated_at))}</span>
+        <div class="panel ranking-card${r.replaced ? " replaced" : ""}">
+          <div class="ranking-head"><h3>${esc(r.author || "Anonyme")}</h3>
+            <button class="del-btn" data-delrank="${esc(r.voter)}" data-who="${esc(r.author || "Anonyme")}">Supprimer</button></div>
+          <span class="comment-date">${esc(ago(r.updated_at))}${r.replaced ? " · <b>remplacé par un plus récent</b> (ne compte plus)" : ""}</span>
           <ol>${r.track_ids.map(id => `<li>${esc(byId(id)?.title || id)}</li>`).join("")}</ol>
         </div>`).join("")}</div>`
     : `<p class="empty">Personne n'a encore fait ce classement.</p>`}`;
+  };
   const s = Object.values(state.stats);
   const votes = s.reduce((a, x) => a + (x.count || 0), 0);
   const avg = votes ? s.reduce((a, x) => a + x.avg * x.count, 0) / votes : 0;
   app.innerHTML = `
-    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p><p style="margin-top:16px"><a class="btn" href="#/ajouter">+ Ajouter un morceau</a></p></section>
+    <section class="hero"><h1>Espace créateur</h1><p>Les pastilles <span class="written-at">✎ écrit à…</span> indiquent où en était l'écoute quand la personne a commencé à écrire. Elles ne sont visibles que par toi.</p><p style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="#/ajouter">+ Ajouter un morceau</a><button class="btn teal" id="backupBtn" type="button">⤓ Sauvegarder mes données</button></p></section>
     ${store.demo ? `<p class="notice">Mode démo : rien n'est partagé tant que Supabase n'est pas configuré dans <code>config.js</code>.</p>` : ""}
     <div class="admin-stats">
       <div class="stat"><b>${state.tracks.length}</b><span>morceaux</span></div>
@@ -955,6 +975,37 @@ async function renderAdmin() {
     }).join("")}</ol>
     <p style="margin-top:28px"><button class="btn ghost" id="logout">Quitter le mode créateur</button></p>`;
   $("#logout").addEventListener("click", async () => { await store.logout(); state.admin = false; syncAdmin(); location.hash = "#/"; });
+
+  /* Supprimer un classement (doublon…) — après confirmation */
+  $$("[data-delrank]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`Supprimer définitivement ce classement de « ${b.dataset.who} » ?\nCette action ne peut pas être annulée.`)) return;
+    b.disabled = true; b.textContent = "…";
+    try { await store.deleteRanking(b.dataset.delrank); toast("Classement supprimé"); renderAdmin(); }
+    catch (err) {
+      console.error(err); b.disabled = false; b.textContent = "Supprimer";
+      toast(/admin_delete_ranking|function|schema cache/i.test(err.message || "") ? "Lance d'abord le SQL supabase-maj-2.sql dans Supabase" : "Suppression impossible : " + (err.message || err));
+    }
+  }));
+
+  /* Sauvegarde complète téléchargée sur l'ordinateur (rien n'est modifié) */
+  $("#backupBtn").addEventListener("click", async () => {
+    const btn = $("#backupBtn"); btn.disabled = true; btn.textContent = "Préparation…";
+    try {
+      const [comments, rankings, ratings] = await Promise.all([
+        store.comments(null, true),
+        store.rankings(),
+        store.ratings ? store.ratings().catch(() => null) : null
+      ]);
+      const data = { site: CFG.siteTitle, date: new Date().toISOString(), tracks: state.tracks, comments, rankings, ratings, stats: state.stats };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = `omnipotard-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast(`Sauvegarde téléchargée : ${comments.length} commentaires, ${rankings.length} classements${ratings ? `, ${ratings.length} notes` : ""}`);
+    } catch (err) { console.error(err); toast("Sauvegarde impossible : " + (err.message || err)); }
+    btn.disabled = false; btn.textContent = "⤓ Sauvegarder mes données";
+  });
 }
 /* Classement global : pour chaque liste, le 1er vaut 100 %, le dernier 0 % ; on fait la moyenne. */
 function rankingBoard(rankings, wip = false) {

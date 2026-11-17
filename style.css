@@ -748,3 +748,8 @@ a.tag:hover, .tag.on { background: var(--accent); color: #fff; border-color: var
   #volRange { display: none; }   /* sur téléphone, le volume se règle avec les boutons de l'appareil */
   .player-progress { grid-column: 1 / -1; }
 }
+
+/* ---------- Classements : suppression et « remplacé » ---------- */
+.ranking-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ranking-card.replaced { opacity: .55; border-style: dashed; }
+.ranking-card.replaced b { color: #ffd08a; font-weight: 600; }
