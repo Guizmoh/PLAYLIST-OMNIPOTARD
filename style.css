@@ -756,7 +756,7 @@ a.tag:hover, .tag.on { background: var(--accent); color: #fff; border-color: var
 
 /* ---------- Notes des auditeurs (créateur) ---------- */
 .rating-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.rating-list li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 14px; }
+.rating-list li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; font-size: 14px; }
 .rl-stars { color: var(--accent); letter-spacing: 1px; font-size: 13px; }
 .rl-name { color: #dfe7f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-date { color: var(--muted); font-size: 12px; white-space: nowrap; }

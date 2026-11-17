@@ -156,3 +156,12 @@ begin
         updated_at = now();
 end $$;
 grant execute on function public.rate_track(text, int, text, text) to anon, authenticated;
+
+-- ---------- Mise à jour n°4 (voir aussi supabase-maj-4.sql) ----------
+create or replace function public.admin_delete_rating(p_track text, p_voter text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'réservé au créateur'; end if;
+  delete from ratings where track_id = p_track and voter = p_voter;
+end $$;
+grant execute on function public.admin_delete_rating(text, text) to authenticated;

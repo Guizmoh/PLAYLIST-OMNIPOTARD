@@ -96,6 +96,7 @@ function makeSupabaseStore() {
     async rankings() { return ok(await sb.rpc("admin_rankings")) || []; },
     // Réservés au créateur (fonctions SQL de supabase-maj-2.sql)
     async deleteRanking(voter) { ok(await sb.rpc("admin_delete_ranking", { p_voter: voter })); },
+    async deleteRating(track, voter) { ok(await sb.rpc("admin_delete_rating", { p_track: track, p_voter: voter })); },
     async ratings() { return ok(await sb.rpc("admin_ratings")) || []; },
     async login(email, password) { ok(await sb.auth.signInWithPassword({ email, password })); return this.isAdmin(); },
     async logout() { await sb.auth.signOut(); },
@@ -137,6 +138,7 @@ function makeLocalStore() {
     },
     async rankings() { return Object.values(ls.get("pl:demo:rankings", {})).sort((a, b) => b.updated_at.localeCompare(a.updated_at)); },
     async deleteRanking(voter) { const r = ls.get("pl:demo:rankings", {}); delete r[voter]; ls.set("pl:demo:rankings", r); },
+    async deleteRating(track, voter) { const r = ls.get(R, {}); if (r[track]) { delete r[track][voter]; if (!Object.keys(r[track]).length) delete r[track]; } ls.set(R, r); },
     async ratings() { return Object.entries(ls.get(R, {})).flatMap(([track_id, v]) => Object.entries(v).map(([voter, stars]) => ({ track_id, voter, stars }))); },
     async login() { ls.set("pl:demo:admin", true); return true; },
     async logout() { ls.set("pl:demo:admin", false); },
@@ -930,7 +932,7 @@ async function renderAdmin() {
       <div class="panel ranking-card">
         <h3><a href="#/t/${esc(t.id)}">${esc(t.title)}</a></h3>
         <span class="comment-date">${(list.reduce((a, r) => a + r.stars, 0) / list.length).toFixed(1).replace(".", ",")} / 5 · ${list.length} note${list.length > 1 ? "s" : ""}</span>
-        <ul class="rating-list">${list.map(r => `<li><span class="rl-stars">${starsTxt(r.stars)}</span><span class="rl-name">${esc(whoRated(r))}</span>${r.updated_at ? `<span class="rl-date">${esc(ago(r.updated_at))}</span>` : ""}</li>`).join("")}</ul>
+        <ul class="rating-list">${list.map(r => `<li><span class="rl-stars">${starsTxt(r.stars)}</span><span class="rl-name">${esc(whoRated(r))}</span>${r.updated_at ? `<span class="rl-date">${esc(ago(r.updated_at))}</span>` : "<span></span>"}<button class="del-btn" data-delrating="${esc(r.voter)}" data-track="${esc(r.track_id)}" data-label="${esc(r.stars + "★ de " + whoRated(r) + " sur « " + t.title + " »")}" aria-label="Supprimer cette note">×</button></li>`).join("")}</ul>
       </div>`).join("")}</div>` : `<p class="empty">Aucune note pour l'instant.</p>`}`;
   };
   const isWipRanking = r => String(r.voter || "").endsWith(":wip");
@@ -1000,6 +1002,20 @@ async function renderAdmin() {
     }).join("")}</ol>
     <p style="margin-top:28px"><button class="btn ghost" id="logout">Quitter le mode créateur</button></p>`;
   $("#logout").addEventListener("click", async () => { await store.logout(); state.admin = false; syncAdmin(); location.hash = "#/"; });
+
+  /* Supprimer une note précise — après confirmation */
+  $$("[data-delrating]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`Supprimer définitivement la note ${b.dataset.label} ?\nCette action ne peut pas être annulée.`)) return;
+    b.disabled = true;
+    try {
+      await store.deleteRating(b.dataset.track, b.dataset.delrating);
+      state.stats = await store.stats().catch(() => state.stats);
+      toast("Note supprimée"); renderAdmin();
+    } catch (err) {
+      console.error(err); b.disabled = false;
+      toast(/admin_delete_rating|function|schema cache/i.test(err.message || "") ? "Lance d'abord le SQL supabase-maj-4.sql dans Supabase" : "Suppression impossible : " + (err.message || err));
+    }
+  }));
 
   /* Supprimer un classement (doublon…) — après confirmation */
   $$("[data-delrank]").forEach(b => b.addEventListener("click", async () => {
