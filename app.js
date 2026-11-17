@@ -84,7 +84,13 @@ function makeSupabaseStore() {
       const rows = ok(await sb.from("track_stats").select("*")) || [];
       return Object.fromEntries(rows.map(r => [r.track_id, { avg: +r.rating_avg || 0, count: r.rating_count || 0, comments: r.comment_count || 0 }]));
     },
-    async rate(trackId, stars) { ok(await sb.rpc("rate_track", { p_track: trackId, p_stars: stars, p_voter: voterId })); },
+    async rate(trackId, stars) {
+      // Envoie aussi le nom du visiteur s'il l'a déjà indiqué (commentaire / classement).
+      // Si la mise à jour SQL n°3 n'est pas encore installée, on retombe sur l'ancienne version.
+      const author = ls.get("pl:name", "") || null;
+      const r = await sb.rpc("rate_track", { p_track: trackId, p_stars: stars, p_voter: voterId, p_author: author });
+      if (r.error) ok(await sb.rpc("rate_track", { p_track: trackId, p_stars: stars, p_voter: voterId }));
+    },
     // scope "wip" : classement séparé des Work In Progress (même table, identifiant suffixé)
     async saveRanking(author, ids, scope) { ok(await sb.rpc("save_ranking", { p_voter: voterId + (scope ? ":" + scope : ""), p_author: author || null, p_tracks: ids })); },
     async rankings() { return ok(await sb.rpc("admin_rankings")) || []; },
@@ -909,6 +915,24 @@ async function renderAdmin() {
 
   const all = await store.comments(null, true).catch(() => []);
   const allRankings = await store.rankings().catch(() => []);
+  const allRatings = store.ratings ? await store.ratings().catch(() => []) : [];
+  /* Qui a mis quelle note : nom enregistré avec la note, sinon nom donné dans un
+     classement fait depuis le même navigateur, sinon « Anonyme » + code court */
+  const nameByVoter = {};
+  for (const r of allRankings) { const v = String(r.voter || "").replace(/:wip$/, ""); if (r.author && !nameByVoter[v]) nameByVoter[v] = r.author; }
+  const whoRated = r => r.author || nameByVoter[r.voter] || `Anonyme · ${String(r.voter || "").slice(0, 4)}`;
+  const starsTxt = n => "★".repeat(n) + "☆".repeat(5 - n);
+  const ratingsSection = () => {
+    const byTrack = state.tracks.map(t => ({ t, list: allRatings.filter(r => r.track_id === t.id).sort((a, b) => b.stars - a.stars) })).filter(x => x.list.length);
+    return `
+    <h2 class="section-title">Notes des auditeurs <small>${allRatings.length}</small></h2>
+    ${byTrack.length ? `<div class="rankings-grid">${byTrack.map(({ t, list }) => `
+      <div class="panel ranking-card">
+        <h3><a href="#/t/${esc(t.id)}">${esc(t.title)}</a></h3>
+        <span class="comment-date">${(list.reduce((a, r) => a + r.stars, 0) / list.length).toFixed(1).replace(".", ",")} / 5 · ${list.length} note${list.length > 1 ? "s" : ""}</span>
+        <ul class="rating-list">${list.map(r => `<li><span class="rl-stars">${starsTxt(r.stars)}</span><span class="rl-name">${esc(whoRated(r))}</span>${r.updated_at ? `<span class="rl-date">${esc(ago(r.updated_at))}</span>` : ""}</li>`).join("")}</ul>
+      </div>`).join("")}</div>` : `<p class="empty">Aucune note pour l'instant.</p>`}`;
+  };
   const isWipRanking = r => String(r.voter || "").endsWith(":wip");
   /* Un seul classement compte par nom (le plus récent) ; les anciens restent stockés,
      simplement marqués « remplacé » et ignorés dans le total. Les anonymes comptent tous. */
@@ -954,6 +978,7 @@ async function renderAdmin() {
     </div>
     ${boardSection("Classement des auditeurs — Morceaux", allRankings.filter(r => !isWipRanking(r)), false)}
     ${boardSection("Classement des auditeurs — W.I.P.", allRankings.filter(isWipRanking), true)}
+    ${ratingsSection()}
     <h2 class="section-title">Derniers commentaires <small>${all.length}</small></h2>
     <ul class="comments">${all.slice(0, 50).map(c => {
       const t = byId(c.track_id), name = c.author || "Anonyme";

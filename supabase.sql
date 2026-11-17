@@ -140,3 +140,19 @@ begin
   return query select * from ratings order by updated_at desc;
 end $$;
 grant execute on function public.admin_ratings() to authenticated;
+
+-- ---------- Mise à jour n°3 (voir aussi supabase-maj-3.sql) ----------
+alter table public.ratings add column if not exists author text check (char_length(author) <= 40);
+
+create or replace function public.rate_track(p_track text, p_stars int, p_voter text, p_author text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_stars < 1 or p_stars > 5 then raise exception 'note invalide'; end if;
+  insert into ratings (track_id, voter, stars, author)
+  values (p_track, left(p_voter, 64), p_stars, left(nullif(trim(p_author), ''), 40))
+  on conflict (track_id, voter) do update
+    set stars = excluded.stars,
+        author = coalesce(excluded.author, ratings.author),
+        updated_at = now();
+end $$;
+grant execute on function public.rate_track(text, int, text, text) to anon, authenticated;
